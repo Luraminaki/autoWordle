@@ -1,0 +1,8 @@
+node_modules
+.yarnclean
+*.pyc
+.venv/
+.venv
+.venv.lnk
+*.zip
+*.txt

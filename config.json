@@ -1,0 +1,5 @@
+{
+    "service_id": "wordle",
+    "version": "0.1.0",
+    "logging_level": "INFO"
+}
