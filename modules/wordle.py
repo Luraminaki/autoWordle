@@ -44,7 +44,7 @@ class Wordle ():
             raise ValueError
         print(f"{curr_func} -- Found {len(self.words)} words...")
 
-        self.pool_words_information: list | list[tuple[str, float]] = []
+        # self.words_information: list | list[tuple[str, float]] = self._compute_words_information(self.words)
         self.pool_words = deepcopy(self.words)
 
         print(f"{curr_func} -- Computing remaining information...")
@@ -121,17 +121,17 @@ class Wordle ():
             return None
 
         # print(f"{curr_func} -- Computing matches information...")
-        self.pool_words_information = self._compute_words_information(self.pool_words)
+        pool_words_information = self._compute_words_information(self.pool_words)
 
         # print(f"{curr_func} -- Computing remaining information...")
-        self.information = -helpers.safe_log2(1.0/float(len(self.pool_words_information)))
+        self.information = -helpers.safe_log2(1.0/float(len(pool_words_information)))
 
         tac = time.perf_counter() - tic
 
         print(f"{curr_func} -- Found {len(self.pool_words)} matches in {tac} second(s)")
         print(f"{curr_func} -- Remaining information is {self.information}")
 
-        return self.pool_words_information
+        return pool_words_information
 
 
     def submit_guess(self, guess: str) -> None | tuple | tuple[int]:
