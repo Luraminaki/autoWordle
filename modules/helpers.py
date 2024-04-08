@@ -31,22 +31,22 @@ MISPLACED = 1
 EXACT = 2
 
 
-def get_word_list(path: pathlib.Path, word_lenght: int=5) -> set | set[tuple[int]]:
+def get_words_list(path: pathlib.Path, word_lenght: int=5) -> set | set[tuple[int]]:
     curr_func = inspect.currentframe().f_code.co_name
 
-    result = set()
+    words = set()
 
     if not path.is_file():
         print(f"{curr_func} -- Invalid path for file {path}")
-        return result
+        return words
 
     with path.open('r', encoding='utf-8') as fp:
         for word in fp.readlines():
             word = unidecode.unidecode(word.strip()).lower()
             if (len(word) == word_lenght and word.isalpha()):
-                result.add(tuple(ord(letter) for letter in word))
+                words.add(tuple(ord(letter) for letter in word))
 
-    return result
+    return words
 
 
 def compute_pattern(guess: tuple[int], word: tuple[int]) -> tuple | tuple[int]:
@@ -59,14 +59,12 @@ def compute_pattern(guess: tuple[int], word: tuple[int]) -> tuple | tuple[int]:
             temp_guess[w_cptr] = -1
 
         else:
-            letter_count = temp_guess.count(w_letter)
-            if letter_count == 0:
+            if temp_guess.count(w_letter) == 0:
                 continue
 
-            for _ in range(letter_count):
-                idx = temp_guess.index(w_letter)
-                pattern[idx] = MISPLACED
-                temp_guess[idx] = -1
+            idx = temp_guess.index(w_letter)
+            pattern[idx] = MISPLACED
+            temp_guess[idx] = -1
 
     return tuple(pattern)
 

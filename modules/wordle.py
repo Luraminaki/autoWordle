@@ -39,7 +39,7 @@ class Wordle ():
         words_file = pathlib.Path(words_path).expanduser()
 
         print(f"{curr_func} -- Building word list...")
-        self.words = helpers.get_word_list(words_file, self.word_lenght)
+        self.words = helpers.get_words_list(words_file, self.word_lenght)
         if not self.words:
             raise ValueError
         print(f"{curr_func} -- Found {len(self.words)} words...")
@@ -55,7 +55,7 @@ class Wordle ():
 
         print(f"{curr_func} -- Session initialised in {tac} second(s) \
                 \n\tWord to guess is: {''.join(chr(ord_letter) for ord_letter in self.word)} \
-                \n\t Remaining information is: {self.information} bit(s)")
+                \n\tRemaining information is: {self.information} bit(s)")
 
 
     def _compute_words_information(self, pool_words: set[tuple[int]]) -> list | list[tuple[str, float]]:
@@ -93,18 +93,18 @@ class Wordle ():
         return not pattern.isnumeric() or len(pattern) != self.word_lenght or foreign_found
 
 
-    def submit_word_and_pattern(self, word: str, pattern: str) -> None | list | list[tuple[str, float]]:
+    def submit_guess_and_pattern(self, guess: str, pattern: str) -> None | list | list[tuple[str, float]]:
         curr_func = inspect.currentframe().f_code.co_name
 
-        if self._is_invalid_word(word):
-            print(f"{curr_func} -- Word {word} is not allowed")
+        if self._is_invalid_word(guess):
+            print(f"{curr_func} -- Word {guess} is not allowed")
             return None
 
         if self._is_invalid_pattern(pattern):
             print(f"{curr_func} -- Pattern {pattern} is not allowed")
             return None
 
-        t_word = tuple(ord(letter) for letter in word)
+        t_guess = tuple(ord(letter) for letter in guess)
         t_pattern = tuple(int(p) for p in pattern)
 
         tic = time.perf_counter()
@@ -114,7 +114,7 @@ class Wordle ():
             return None
 
         # print(f"{curr_func} -- Finding possible matches...")
-        self.pool_words = helpers.find_possible_matches(t_word, self.pool_words, t_pattern)
+        self.pool_words = helpers.find_possible_matches(t_guess, self.pool_words, t_pattern)
 
         if not self.pool_words:
             print(f"{curr_func} -- Pool words is empty")
@@ -134,15 +134,15 @@ class Wordle ():
         return self.pool_words_information
 
 
-    def submit_word(self, word: str) -> None | tuple | tuple[int]:
+    def submit_guess(self, guess: str) -> None | tuple | tuple[int]:
         curr_func = inspect.currentframe().f_code.co_name
 
-        if self._is_invalid_word(word):
-            print(f"{curr_func} -- Word {word} is not allowed")
+        if self._is_invalid_word(guess):
+            print(f"{curr_func} -- Word {guess} is not allowed")
             return None
 
-        pattern = helpers.compute_pattern(guess=tuple(ord(letter) for letter in word), word=self.word)
-        print(f"{curr_func} -- {word}")
+        pattern = helpers.compute_pattern(guess=tuple(ord(letter) for letter in guess), word=self.word)
+        print(f"{curr_func} -- {guess}")
         print(f"{curr_func} -- {helpers.pattern_to_emoji(pattern)}")
 
         return pattern
@@ -162,20 +162,23 @@ def main() -> None:
 
     nb_tries = 0
     while nb_tries < max_tries:
+        time.sleep(1)
         print(f"{curr_func} -- Attempt n° {nb_tries + 1} -- Trying word: {guess}")
 
-        pattern = game.submit_word(guess)
+        pattern = game.submit_guess(guess)
         if pattern == tuple([helpers.EXACT]*max_chars):
             break
 
-        pool = game.submit_word_and_pattern(guess, ''.join(str(p) for p in pattern))
+        pool = game.submit_guess_and_pattern(guess, ''.join(str(p) for p in pattern))
         if pool is None:
             break
 
         guess = "".join(chr(ord_letter) for ord_letter in pool[-1][0])
 
         nb_tries = nb_tries + 1
-        time.sleep(1)
+
+    if nb_tries == max_tries:
+        print(f"{curr_func} -- FAIL -- autoWordle failed to find a solution in {max_tries} (or less) attemps")
 
 
 if __name__ == "__main__":
