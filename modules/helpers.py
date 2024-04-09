@@ -14,6 +14,7 @@ import pathlib
 import math
 
 import itertools as it
+from copy import deepcopy
 from multiprocessing import Process, managers, Manager, cpu_count
 
 import unidecode
@@ -111,6 +112,22 @@ def compute_word_entropy_worker(pool_words_chunk: set[tuple[int]], pool_words: s
         return_dict_entropy[word] = compute_word_entropy(word, pool_words)
 
 
+def compute_word_entropy_faster(word: tuple[int], pattern_compendium: dict[str, set[tuple[tuple[int]]]], nbr_words: int) -> float:
+    entropy = 0.0
+
+    for _, compendium in pattern_compendium.items():
+        match_probability = len([word_matched for word_matched in compendium if word in word_matched]) / nbr_words
+        entropy += (match_probability * -safe_log2(match_probability))
+
+    return entropy
+
+
+def compute_word_entropy_faster_worker(pool_words_chunk: set[tuple[int]], pattern_compendium: dict[str, set[tuple[tuple[int]]]], nbr_words: int,
+                                       return_dict_entropy: managers.DictProxy) -> None:
+    for word in pool_words_chunk:
+        return_dict_entropy[word] = compute_word_entropy_faster(word, pattern_compendium, nbr_words)
+
+
 def prepare_worker_datas(pool_words: set[tuple[int]], threads: int=0) -> tuple[list[list[tuple[int]]], managers.DictProxy, list[Process]]:
     if not 0 < threads <= cpu_count():
         threads = cpu_count()
@@ -124,3 +141,26 @@ def prepare_worker_datas(pool_words: set[tuple[int]], threads: int=0) -> tuple[l
     jobs: list[Process] = []
 
     return pool_words_chunked, return_dict_entropy, jobs
+
+
+def build_pattern_compendium(pool_words: set[tuple[int]]) -> dict | dict[str, set[tuple[tuple[int]]]]:
+    pool_words_pile: set[tuple[int]] = deepcopy(pool_words)
+
+    pattern_compendium: dict[str, set[tuple[tuple[int]]]] = {}
+
+    while pool_words_pile:
+        word_piled = pool_words_pile.pop()
+
+        for word in pool_words:
+
+            if word == word_piled:
+                continue
+
+            pattern = ''.join(str(p) for p in compute_pattern(guess=word_piled, word=word))
+
+            if pattern_compendium.get(pattern, None) is None:
+                pattern_compendium[pattern] = {tuple(sorted([word_piled, word]))}
+
+            pattern_compendium[pattern].add(tuple(sorted([word_piled, word])))
+
+    return pattern_compendium

@@ -26,7 +26,7 @@ __version__ = '0.1.0'
 
 
 class Wordle ():
-    def __init__(self, words_path: str, word_lenght: int=5, tries: int=6, threads: int=0) -> None:
+    def __init__(self, words_path: str, compute_best_opening: bool=False, word_lenght: int=5, tries: int=6, threads: int=0) -> None:
         curr_func = inspect.currentframe().f_code.co_name
 
         tic = time.perf_counter()
@@ -42,14 +42,21 @@ class Wordle ():
         self.words = helpers.get_words_list(words_file, self.word_lenght)
         if not self.words:
             raise ValueError
+        self.pool_words = deepcopy(self.words)
         print(f"{curr_func} -- Found {len(self.words)} words...")
 
-        # self.words_information: list | list[tuple[str, float]] = self._compute_words_information(self.words)
-        self.pool_words = deepcopy(self.words)
+        print(f"{curr_func} -- Building pattern compendium...")
+        self.pattern_compendium = helpers.build_pattern_compendium(self.pool_words)
+        print(f"{curr_func} -- Found {len(self.pattern_compendium)} patterns...")
+
+        self.words_information: list | list[tuple[str, float]] = []
+        if compute_best_opening:
+            print(f"{curr_func} -- Computing exhaustive information for best opening...")
+            self.words_information: list | list[tuple[str, float]] = self._compute_words_information_faster(self.pool_words)
 
         print(f"{curr_func} -- Computing remaining information...")
-        self.information = -helpers.safe_log2(1.0/float(len(self.words)))
-        self.word = random.choice(list(self.words))
+        self.information = -helpers.safe_log2(1.0/float(len(self.pool_words)))
+        self.word = random.choice(list(self.pool_words))
 
         tac = time.perf_counter() - tic
 
@@ -81,6 +88,29 @@ class Wordle ():
         return words_information
 
 
+    def _compute_words_information_faster(self, pool_words: set[tuple[int]]) -> list | list[tuple[str, float]]:
+        curr_func = inspect.currentframe().f_code.co_name
+
+        words_information: list | list[tuple[str, float]] = []
+        pool_words_chunked, return_dict_entropy, jobs = helpers.prepare_worker_datas(pool_words, self.threads)
+        pattern_compendium = helpers.build_pattern_compendium(pool_words)
+
+        for pool_words_chunk in pool_words_chunked:
+            jobs.append(Process(target=helpers.compute_word_entropy_faster_worker,
+                                args=(set(pool_words_chunk), pattern_compendium, len(pool_words), return_dict_entropy)))
+            jobs[-1].start()
+
+        for process in jobs:
+            process.join()
+
+        try:
+            words_information = sorted(return_dict_entropy.items(), key=lambda x : x[1], reverse=True)
+
+        except Exception as err:
+            print(f"{curr_func} -- Something went wrong: {repr(err)}")
+
+        return words_information
+
 
     def _is_invalid_word(self, word: str) -> bool:
         return word == '' or len(word) != self.word_lenght or tuple(ord(letter) for letter in word) not in self.words
@@ -105,7 +135,6 @@ class Wordle ():
             return None
 
         t_guess = tuple(ord(letter) for letter in guess)
-        t_pattern = tuple(int(p) for p in pattern)
 
         tic = time.perf_counter()
 
@@ -114,14 +143,21 @@ class Wordle ():
             return None
 
         # print(f"{curr_func} -- Finding possible matches...")
-        self.pool_words = helpers.find_possible_matches(t_guess, self.pool_words, t_pattern)
+        pool_words: set[tuple[int]] = set()
+        for pair_words in self.pattern_compendium.get(pattern, {}):
+            try:
+                conj = int(not bool(pair_words.index(t_guess)))
+                pool_words.add(pair_words[conj])
+            except:
+                pass
+        self.pool_words = self.pool_words.intersection(pool_words)
 
         if not self.pool_words:
             print(f"{curr_func} -- Pool words is empty")
             return None
 
         # print(f"{curr_func} -- Computing matches information...")
-        pool_words_information = self._compute_words_information(self.pool_words)
+        pool_words_information = self._compute_words_information_faster(self.pool_words)
 
         # print(f"{curr_func} -- Computing remaining information...")
         self.information = -helpers.safe_log2(1.0/float(len(pool_words_information)))
@@ -152,17 +188,21 @@ def main() -> None:
     curr_func = inspect.currentframe().f_code.co_name
 
     file_path = "../data/fr.txt"
+    best_opening = False
     max_chars = 5
     max_tries = 6
     threads = 1
 
-    game = Wordle(file_path, max_chars, max_tries, threads)
-    guess = "".join(chr(ord_letter) for ord_letter in random.choice(list(game.words)))
+    game = Wordle(file_path, best_opening, max_chars, max_tries, threads)
+
+    if best_opening:
+        guess = "".join(chr(ord_letter) for ord_letter in game.words_information[0][0])
+    guess = "aires" # "".join(chr(ord_letter) for ord_letter in random.choice(list(game.words)))
     pattern = tuple([helpers.MISS]*max_chars)
 
     nb_tries = 0
     while nb_tries < max_tries:
-        time.sleep(1)
+        time.sleep(0.25)
         print(f"{curr_func} -- Attempt n° {nb_tries + 1} -- Trying word: {guess}")
 
         pattern = game.submit_guess(guess)
