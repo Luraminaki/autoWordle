@@ -165,6 +165,7 @@ def main() -> None:
         try:
             idx = nb_guesses.index(over_try)
             failed_games = len(nb_guesses[idx:])
+            break
         except:
             continue
 
