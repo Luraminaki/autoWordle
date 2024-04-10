@@ -34,7 +34,6 @@ class Wordle ():
         self.information = -helpers.safe_log2(1.0/float(len(self.pool_words)))
         self.word = random.choice(list(self.pool_words))
 
-        print(f"{curr_func} -- Word to guess is: {''.join(chr(ord_letter) for ord_letter in self.word)}")
         print(f"{curr_func} -- Remaining information is: {round(self.information, 2)} bit(s)")
 
 
@@ -119,16 +118,16 @@ def main() -> None:
     max_tries = 6
     threads = 0
 
-    max_games = 3000
+    language_launcher = helpers.LangLauncher(file_path, best_opening, max_chars, max_tries, threads)
     nb_guesses: list[int] = []
 
-    language_launcher = helpers.LangLauncher(file_path, best_opening, max_chars, max_tries, threads)
-
     cptr_games = 0
-    while cptr_games < max_games:
+    for word in language_launcher.words:
         game = Wordle(language_launcher)
+        game.word = word
 
         print(f"{curr_func} -- Starting game n°{cptr_games + 1}")
+        print(f"{curr_func} -- Word to guess is: {''.join(chr(ord_letter) for ord_letter in game.word)}")
 
         if best_opening:
             guess = "".join(chr(ord_letter) for ord_letter in game.language_launcher.words_information[0][0])
@@ -170,7 +169,7 @@ def main() -> None:
             continue
 
     print(f"{curr_func} -- END -- Played {cptr_games} games")
-    print(f"{curr_func} -- END -- Average tries is {sum(nb_guesses) / cptr_games}")
+    print(f"{curr_func} -- END -- Average tries is {round(sum(nb_guesses) / cptr_games, 2)}")
     print(f"{curr_func} -- END -- Median tries is {median}")
     print(f"{curr_func} -- END -- (Min, Max) tries are ({min(nb_guesses)}, {max(nb_guesses)})")
     print(f"{curr_func} -- END -- {nb_guesses.count(1)} Lucky guess")
