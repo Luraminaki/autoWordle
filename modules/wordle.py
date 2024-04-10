@@ -140,7 +140,7 @@ def main() -> None:
         if pool is None:
             break
 
-        guess = "".join(chr(ord_letter) for ord_letter in pool[-1][0])
+        guess = "".join(chr(ord_letter) for ord_letter in pool[0][0])
 
         nb_tries = nb_tries + 1
 
