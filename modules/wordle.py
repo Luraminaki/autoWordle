@@ -35,7 +35,7 @@ class Wordle ():
         self.word = random.choice(list(self.pool_words))
 
         print(f"{curr_func} -- Word to guess is: {''.join(chr(ord_letter) for ord_letter in self.word)}")
-        print(f"{curr_func} -- Remaining information is: {self.information} bit(s)")
+        print(f"{curr_func} -- Remaining information is: {round(self.information, 2)} bit(s)")
 
 
     def _is_invalid_word(self, word: str) -> bool:
@@ -90,8 +90,8 @@ class Wordle ():
 
         tac = time.perf_counter() - tic
 
-        print(f"{curr_func} -- Found {len(self.pool_words)} matches in {tac} second(s)")
-        print(f"{curr_func} -- Remaining information is {self.information}")
+        print(f"{curr_func} -- Found {len(self.pool_words)} matches in {round(tac, 2)} second(s)")
+        print(f"{curr_func} -- Remaining information is {round(self.information, 2)}")
 
         return pool_words_information
 
@@ -119,34 +119,61 @@ def main() -> None:
     max_tries = 6
     threads = 0
 
+    max_games = 3000
+    nb_guesses: list[int] = []
+
     language_launcher = helpers.LangLauncher(file_path, best_opening, max_chars, max_tries, threads)
-    game = Wordle(language_launcher)
 
-    if best_opening:
-        guess = "".join(chr(ord_letter) for ord_letter in game.language_launcher.words_information[0][0])
-    guess = "aires" # "".join(chr(ord_letter) for ord_letter in random.choice(list(game.words)))
-    pattern = tuple([helpers.MISS]*max_chars)
+    cptr_games = 0
+    while cptr_games < max_games:
+        game = Wordle(language_launcher)
 
-    nb_tries = 0
-    while nb_tries < max_tries:
-        time.sleep(0.25)
-        print(f"{curr_func} -- Attempt n° {nb_tries + 1} -- Trying word: {guess}")
+        print(f"{curr_func} -- Starting game n°{cptr_games + 1}")
 
-        pattern = game.submit_guess(guess)
-        if pattern == tuple([helpers.EXACT]*max_chars):
-            break
+        if best_opening:
+            guess = "".join(chr(ord_letter) for ord_letter in game.language_launcher.words_information[0][0])
+        guess = "aires" # "".join(chr(ord_letter) for ord_letter in random.choice(list(game.words)))
+        pattern = tuple([helpers.MISS]*max_chars)
 
-        pool = game.submit_guess_and_pattern(guess, ''.join(str(p) for p in pattern))
-        if pool is None:
-            break
+        cptr_tries = 0
+        while cptr_tries < max_tries*2:
+            print(f"{curr_func} -- Attempt n° {cptr_tries + 1} -- Trying word: {guess}")
 
-        guess = "".join(chr(ord_letter) for ord_letter in pool[0][0])
+            pattern = game.submit_guess(guess)
+            if pattern == tuple([helpers.EXACT]*max_chars):
+                break
 
-        nb_tries = nb_tries + 1
+            pool = game.submit_guess_and_pattern(guess, ''.join(str(p) for p in pattern))
+            if pool is None:
+                break
 
-    if nb_tries == max_tries:
-        print(f"{curr_func} -- FAIL -- autoWordle failed to find a solution in {max_tries} (or less) attemps")
+            guess = "".join(chr(ord_letter) for ord_letter in pool[0][0])
 
+            cptr_tries = cptr_tries + 1
+
+        if cptr_tries == max_tries:
+            print(f"{curr_func} -- FAIL -- autoWordle failed to find a solution in {max_tries} (or less) attemps")
+
+        print("##############################################################")
+        nb_guesses.append(cptr_tries + 1)
+        cptr_games = cptr_games + 1
+
+    nb_guesses.sort()
+    median = nb_guesses[cptr_games // 2] if cptr_games % 2 == 0 else (nb_guesses[cptr_games // 2] + nb_guesses[(cptr_games // 2) + 1]) / 2
+    failed_games = 0
+    for over_try in range(6, (max_tries*2) + 1, 1):
+        try:
+            idx = nb_guesses.index(over_try)
+            failed_games = len(nb_guesses[idx:])
+        except:
+            continue
+
+    print(f"{curr_func} -- END -- Played {cptr_games} games")
+    print(f"{curr_func} -- END -- Average tries is {sum(nb_guesses) / cptr_games}")
+    print(f"{curr_func} -- END -- Median tries is {median}")
+    print(f"{curr_func} -- END -- (Min, Max) tries are ({min(nb_guesses)}, {max(nb_guesses)})")
+    print(f"{curr_func} -- END -- {nb_guesses.count(1)} Lucky guess")
+    print(f"{curr_func} -- END -- {failed_games} Game Over")
 
 if __name__ == "__main__":
     main()

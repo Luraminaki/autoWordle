@@ -64,7 +64,7 @@ class LangLauncher():
 
         tac = time.perf_counter() - tic
 
-        print(f"{curr_func} -- Language launcher for {words_file.name} initialised in {tac} second(s)")
+        print(f"{curr_func} -- Language launcher for {words_file.name} initialised in {round(tac, 2)} second(s)")
 
 
 def get_words_list(path: pathlib.Path, word_lenght: int=5) -> set | set[tuple[int]]:
