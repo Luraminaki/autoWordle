@@ -161,7 +161,7 @@ def main() -> None:
     nb_guesses.sort()
     median = nb_guesses[cptr_games // 2] if cptr_games % 2 == 0 else (nb_guesses[cptr_games // 2] + nb_guesses[(cptr_games // 2) + 1]) / 2
     failed_games = 0
-    for over_try in range(6, (max_tries*2) + 1, 1):
+    for over_try in range(max_tries + 1, (max_tries*2) + 1, 1):
         try:
             idx = nb_guesses.index(over_try)
             failed_games = len(nb_guesses[idx:])
