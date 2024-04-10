@@ -49,7 +49,7 @@ class Wordle ():
         return not pattern.isnumeric() or len(pattern) != self.language_launcher.word_lenght or foreign_found
 
 
-    def submit_guess_and_pattern(self, guess: str, pattern: str) -> None | list | list[tuple[str, float]]:
+    def submit_guess_and_pattern(self, guess: str, pattern: str) -> None | list | list[tuple[int, float]]:
         curr_func = inspect.currentframe().f_code.co_name
 
         if self._is_invalid_word(guess):
