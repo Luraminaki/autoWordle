@@ -59,8 +59,17 @@ class LangLauncher():
 
         self.words_information: list | list[tuple[tuple[int], float]] = []
         if self.compute_best_opening:
-            print(f"{curr_func} -- Computing exhaustive information for best opening...")
-            self.words_information: list | list[tuple[tuple[int], float]] = compute_words_information_faster(self.words, self.threads)
+            saved_words_information_path = words_path.replace(words_file.name, "info_" + words_file.name)
+            saved_words_information_file = pathlib.Path(saved_words_information_path).expanduser()
+
+            if saved_words_information_file.is_file():
+                print(f"{curr_func} -- Loading exhaustive information for best opening...")
+                self.words_information = load_words_information(saved_words_information_file)
+
+            else:
+                print(f"{curr_func} -- Computing exhaustive information for best opening...")
+                self.words_information = compute_words_information_faster(self.words, self.threads)
+                save_words_information(saved_words_information_file, self.words_information)
 
         tac = time.perf_counter() - tic
 
@@ -83,6 +92,29 @@ def get_words_list(path: pathlib.Path, word_lenght: int=5) -> set | set[tuple[in
                 words.add(tuple(ord(letter) for letter in word))
 
     return words
+
+
+def save_words_information(path: pathlib.Path, words_information: list[tuple[tuple[int], float]]) -> None:
+    path.unlink(missing_ok=True)
+
+    with path.open('a', encoding='utf-8') as fp:
+        for word_info in words_information:
+            word = "".join(chr(letter) for letter in word_info[0])
+            line = "".join([word, " ", str(word_info[1]), "\n"])
+            fp.write(line)
+
+
+def load_words_information(path: pathlib.Path) -> list | list[tuple[tuple[int], float]]:
+    words_information: list | list[tuple[tuple[int], float]] = []
+
+    with path.open('r', encoding='utf-8') as fp:
+        for line in fp.readlines():
+            word_info = line.split(" ", maxsplit=1)
+            word_info[0] = tuple(ord(letter) for letter in word_info[0])
+            word_info[1] = float(word_info[1].strip())
+            words_information.append((word_info[0], word_info[1]))
+
+    return words_information
 
 
 def compute_pattern(guess: tuple[int], word: tuple[int]) -> tuple | tuple[int]:
