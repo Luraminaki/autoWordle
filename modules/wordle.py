@@ -112,7 +112,7 @@ class Wordle ():
 def main() -> None:
     curr_func = inspect.currentframe().f_code.co_name
 
-    file_path = "../data/fr.txt"
+    file_path = "../data/wordle.txt"
     best_opening = True
     max_chars = 5
     max_tries = 6
