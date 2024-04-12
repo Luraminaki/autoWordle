@@ -59,7 +59,7 @@ class LangLauncher():
 
         self.words_information: list | list[tuple[tuple[int], float]] = []
         if self.compute_best_opening:
-            saved_words_information_path = words_path.replace(words_file.name, "info_" + words_file.name)
+            saved_words_information_path = words_path.replace(words_file.name, "info_" + str(self.word_lenght) + "_" + words_file.name)
             saved_words_information_file = pathlib.Path(saved_words_information_path).expanduser()
 
             if saved_words_information_file.is_file():
