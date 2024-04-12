@@ -142,6 +142,88 @@ def pattern_to_emoji(pattern: tuple[int]) -> str:
     return "".join(d[x] for x in pattern)
 
 
+def build_letter_extractor(guess: tuple[int], pattern: tuple[int]) -> dict[str, dict] | dict[str, dict[str, int]]:
+    extractor: dict[str, dict] | dict[str, dict[str, int]] = {"incl": {}, "excl": {}}
+
+    for pos, letter in enumerate(guess):
+        letter_chr = chr(letter)
+
+        if pattern[pos] in (MISPLACED, EXACT):
+            if extractor["incl"].get(letter_chr, None) is None:
+                extractor["incl"][letter_chr] = 1
+                continue
+
+            extractor["incl"][letter_chr] = extractor["incl"][letter_chr] + 1
+            continue
+
+        extractor["excl"][letter_chr] = 1
+
+    return extractor
+
+
+def update_letter_extractor(old_ext: dict[str, dict[str, int]], new_ext: dict[str, dict[str, int]]) -> dict[str, dict] | dict[str, dict[str, int]]:
+    for letter in new_ext["incl"]:
+        if old_ext["incl"].get(letter, None) is None:
+            old_ext["incl"][letter] = new_ext["incl"][letter]
+            continue
+
+        old_ext["incl"][letter] = old_ext["incl"][letter] + new_ext["incl"][letter]
+
+    old_ext["excl"].update(new_ext["excl"])
+
+    return old_ext
+
+
+def gather_pool_letters(pool_words: list[tuple[tuple[int], float]]) -> tuple[set, dict] | tuple[set[int], dict[str, int]]:
+    pool_letters = set()
+    dupes: dict[str, int] = {}
+
+    for word in pool_words:
+        unique_letters = set(word[0])
+        pool_letters.update(unique_letters)
+
+        if len(unique_letters) < len(word[0]):
+            for letter in unique_letters:
+                if count := word[0].count(letter):
+                    char = chr(letter)
+                    dupes[char] = count if dupes.get(char, 0) < count else dupes.get(char, count)
+
+    return pool_letters, dupes
+
+
+def build_suggestion(pool_words_information: list[tuple[tuple[int], float]],
+                     pool_letters: set[int],
+                     pool_letters_dupes: dict[str, int],
+                     letter_extractor: dict[str, dict[str, int]]) -> list[list] | list[list[tuple[tuple[int], float]]]:
+    known_letters = set()
+
+    for letter in letter_extractor["incl"]:
+        # If the letter can have a dupe (according to the pool_words),
+        # but we don't know for sure (because not tested),
+        # then we don't add it in the known_letters (and should test it if possible)
+        if pool_letters_dupes.get(letter, 0) != 0 and pool_letters_dupes.get(letter, 0) > letter_extractor["incl"].get(letter, 0):
+            continue
+        known_letters.add(ord(letter))
+
+    # By design, if the letter extracted is in the exclusion list, but also in the inclusion list,
+    # then it means that we know for sure how many time the letter is in the word to guess,
+    # and we should have pool_letters_dupes.get(letter, 0) == letter_extractor["incl"].get(letter, 0)
+    for letter in letter_extractor["excl"]:
+        known_letters.add(ord(letter))
+
+    unknown_letters = pool_letters.difference(known_letters)
+    suggestions: list[list[tuple[tuple[int], float]]] = [None]*(len(pool_words_information[0][0])+1)
+
+    for word_information in pool_words_information:
+        nb_letters_in_common = len(set(word_information[0]).intersection(unknown_letters))
+        if suggestions[nb_letters_in_common] is None:
+            suggestions[nb_letters_in_common] = [word_information]
+            continue
+        suggestions[nb_letters_in_common].append(word_information)
+
+    return suggestions
+
+
 def safe_log2(x: int | float) -> int | float:
     return math.log2(x) if x > 0 else 0
 
