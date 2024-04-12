@@ -119,7 +119,7 @@ def main() -> None:
     threads = 0
 
     language_launcher = helpers.LangLauncher(file_path, best_opening, max_chars, max_tries, threads)
-    max_games = len(language_launcher.words) # 0 and 1 are forbidden !
+    max_games = 100#len(language_launcher.words) # 0 and 1 are forbidden !
     nb_guesses: list[int] = []
     nb_suggestion_used: list[int] = []
 
@@ -160,7 +160,7 @@ def main() -> None:
                                                    pool_letters,
                                                    pool_letters_dupes,
                                                    letter_extractor)
-
+            print(f"{curr_func} -- Found {len(pool_letters)} different letters to try with {len(pool_letters_dupes)} dupes")
             for sugg_rank in range(game.language_launcher.word_lenght - 1, 0 - 1, -1):
                 if suggestions[sugg_rank] is not None:
                     if len(suggestions[sugg_rank]) > 0:
