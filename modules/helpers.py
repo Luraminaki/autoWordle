@@ -221,6 +221,10 @@ def build_suggestion(pool_words_information: list[tuple[tuple[int], float]],
             continue
         suggestions[nb_letters_in_common].append(word_information)
 
+    for idx, sugg_letters_in_common in enumerate(suggestions):
+        if sugg_letters_in_common:
+            suggestions[idx] = sorted(sugg_letters_in_common, key = lambda x: x[-1], reverse=True)
+
     return suggestions
 
 
