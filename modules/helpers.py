@@ -11,6 +11,7 @@ Created on Tue Apr 02 10:20:51 2024
 import time
 import inspect
 import pathlib
+import pickle
 
 import math
 
@@ -54,12 +55,18 @@ class LangLauncher():
         print(f"{curr_func} -- Found {len(self.words)} words...")
 
         print(f"{curr_func} -- Building pattern compendium...")
-        self.pattern_compendium = build_pattern_compendium(self.words)
+        saved_compendium_path = words_path.replace(words_file.name, words_file.stem + "_" + str(self.word_lenght) + "_compendium.pkl")
+        saved_compendium_file = pathlib.Path(saved_compendium_path).expanduser()
+        if saved_compendium_file.is_file():
+            self.pattern_compendium = pickle.load(saved_compendium_file.open('rb'))
+        else:
+            self.pattern_compendium = build_pattern_compendium(self.words)
+            pickle.dump(self.pattern_compendium, saved_compendium_file.open('wb'))
         print(f"{curr_func} -- Found {len(self.pattern_compendium)} patterns...")
 
         self.words_information: list | list[tuple[tuple[int], float]] = []
         if self.compute_best_opening:
-            saved_words_information_path = words_path.replace(words_file.name, "info_" + str(self.word_lenght) + "_" + words_file.name)
+            saved_words_information_path = words_path.replace(words_file.name, words_file.stem + "_" + str(self.word_lenght) + "_info" + words_file.suffix)
             saved_words_information_file = pathlib.Path(saved_words_information_path).expanduser()
 
             if saved_words_information_file.is_file():
