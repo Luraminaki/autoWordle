@@ -30,10 +30,12 @@ class Wordle ():
         self.language_launcher = language_launcher
 
         print(f"{curr_func} -- Computing remaining information...")
-        self.pool_words = deepcopy(self.language_launcher.words)
-        self.information = -helpers.safe_log2(1.0/float(len(self.pool_words)))
-        self.word = random.choice(list(self.pool_words))
+        self.pool_words = set()
+        self.information = 0.0
+        self.word = tuple()
+        self.letter_extractor = {"incl": {}, "excl": {}}
 
+        self.reset()
         print(f"{curr_func} -- Remaining information is: {round(self.information, 2)} bit(s)")
 
 
@@ -46,6 +48,14 @@ class Wordle ():
         foreign_found = not all(eval in allowed for eval in set(pattern))
 
         return not pattern.isnumeric() or len(pattern) != self.language_launcher.word_lenght or foreign_found
+
+
+    def reset(self) -> None:
+        self.pool_words = deepcopy(self.language_launcher.words)
+        self.information = -helpers.safe_log2(1.0/float(len(self.pool_words)))
+        self.word = random.choice(list(self.pool_words))
+
+        self.letter_extractor = {"incl": {}, "excl": {}}
 
 
     def submit_guess_and_pattern(self, guess: str, pattern: str) -> None | list | list[tuple[tuple[int], float]]:
@@ -118,7 +128,7 @@ def main() -> None:
     max_tries = 6
     threads = 0
 
-    language_launcher = helpers.LangLauncher(file_path, best_opening, max_chars, max_tries, threads)
+    language_launcher = helpers.LangLauncher(file_path, best_opening, max_chars, threads)
     max_games = 100#len(language_launcher.words) # 0 and 1 are forbidden !
     nb_guesses: list[int] = []
     nb_suggestion_used: list[int] = []

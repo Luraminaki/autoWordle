@@ -33,16 +33,17 @@ MISS = 0
 MISPLACED = 1
 EXACT = 2
 
+GAME_MODE_PLAY = 0
+GAME_MODE_SOLVE = 1
 
 class LangLauncher():
-    def __init__(self, words_path: str, compute_best_opening: bool=False, word_lenght: int=5, tries: int=6, threads: int=0) -> None:
+    def __init__(self, words_path: str, compute_best_opening: bool=False, word_lenght: int=5, threads: int=0) -> None:
         curr_func = inspect.currentframe().f_code.co_name
 
         tic = time.perf_counter()
 
         self.compute_best_opening = compute_best_opening
         self.word_lenght = word_lenght
-        self.tries = tries
         self.threads = threads
 
         print(f"{curr_func} -- Acquiring file {words_path}...")
