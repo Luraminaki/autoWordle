@@ -34,11 +34,20 @@ def create_game_session(lang_launcher: helpers.LangLauncher, game_mode: int, max
             }
 
 
+def get_session_stats(game_session: dict[str, str | wordle.Wordle | int | list[str]]) -> dict[str, str | int | list[str]]:
+    return {'game_mode': game_session['game_mode'],
+            'max_tries': game_session['max_tries'],
+            'current_tries': game_session['current_tries'],
+            'patterns': game_session['patterns'],
+            'created_timestamp': game_session['created_timestamp'],
+            'last_active_timestamp': game_session['last_active_timestamp']}
+
+
 def get_word_to_guess(game_session: dict[str, str | wordle.Wordle | int | list[str]]) -> str:
     return ''.join(chr(ord_letter) for ord_letter in game_session['game_session'].word)
 
 
-def get_stats(game_session: dict[str, str | wordle.Wordle | int | list[str]], word: str, pattern: str) -> dict | dict[str, list[tuple[tuple[int], float]] | set[int], dict[str, int] | list[list[tuple[tuple[int], float]]]]:
+def get_guess_stats(game_session: dict[str, str | wordle.Wordle | int | list[str]], word: str, pattern: str) -> dict | dict[str, list[tuple[tuple[int], float]] | set[int], dict[str, int] | list[list[tuple[tuple[int], float]]]]:
     if game_session['game_mode'] == helpers.GAME_MODE_PLAY:
         return {}
 

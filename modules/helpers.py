@@ -35,6 +35,8 @@ EXACT = 2
 
 GAME_MODE_PLAY = 0
 GAME_MODE_SOLVE = 1
+GAME_MODE_ASSISTED = 2
+
 
 class LangLauncher():
     def __init__(self, words_path: str, compute_best_opening: bool=False, word_lenght: int=5, threads: int=0) -> None:
