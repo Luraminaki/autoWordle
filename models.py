@@ -34,6 +34,15 @@ def create_game_session(lang_launcher: helpers.LangLauncher, game_mode: int, max
             }
 
 
+def reset_game_session(game_session: dict[str, str | wordle.Wordle | int | list[str]], game_mode: int, max_tries: int=6) -> None:
+    game_session['game_session'].reset()
+    game_session['game_mode'] = game_mode
+    game_session['max_tries'] = max_tries
+    game_session['current_tries'] = 0
+    game_session['patterns'] = []
+    game_session['last_active_timestamp'] = int(time.time())
+
+
 def get_session_stats(game_session: dict[str, str | wordle.Wordle | int | list[str]]) -> dict[str, str | int | list[str]]:
     return {'game_mode': game_session['game_mode'],
             'max_tries': game_session['max_tries'],
@@ -78,10 +87,3 @@ def submit_guess(game_session: dict[str, str | wordle.Wordle | int | list[str]],
     game_session['last_active_timestamp'] = int(time.time())
 
     return pattern
-
-
-def reset_game(game_session: dict[str, str | wordle.Wordle | int | list[str]]) -> None:
-    game_session['game_session'].reset()
-    game_session['current_tries'] = 0
-    game_session['patterns'] = []
-    game_session['last_active_timestamp'] = int(time.time())
