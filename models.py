@@ -24,14 +24,15 @@ def init_lang_launcher(config: dict) -> helpers.LangLauncher:
 
 
 def create_game_session(lang_launcher: helpers.LangLauncher, game_mode: int, max_tries: int=6) -> dict[str, dict[str, str | wordle.Wordle | int | list[str]]]:
-    return {str(uuid.uuid4()): {'game_session': wordle.Wordle(lang_launcher),
-                                'game_mode': game_mode,
-                                'max_tries': max_tries,
-                                'current_tries': 0,
-                                'patterns': [],
-                                'created_timestamp': int(time.time()),
-                                'last_active_timestamp': int(time.time())}
-            }
+    sesion_uuid = str(uuid.uuid4())
+    return {sesion_uuid: {'game_session': wordle.Wordle(lang_launcher),
+                          'game_mode': game_mode,
+                          'max_tries': max_tries,
+                          'current_tries': 0,
+                          'guesses': [],
+                          'patterns': [],
+                          'created_timestamp': int(time.time()),
+                          'last_active_timestamp': int(time.time())}}
 
 
 def reset_game_session(game_session: dict[str, str | wordle.Wordle | int | list[str]], game_mode: int, max_tries: int=6) -> None:
@@ -39,6 +40,7 @@ def reset_game_session(game_session: dict[str, str | wordle.Wordle | int | list[
     game_session['game_mode'] = game_mode
     game_session['max_tries'] = max_tries
     game_session['current_tries'] = 0
+    game_session['guesses'] = []
     game_session['patterns'] = []
     game_session['last_active_timestamp'] = int(time.time())
 
@@ -47,6 +49,7 @@ def get_session_stats(game_session: dict[str, str | wordle.Wordle | int | list[s
     return {'game_mode': game_session['game_mode'],
             'max_tries': game_session['max_tries'],
             'current_tries': game_session['current_tries'],
+            'guesses': game_session['guesses'],
             'patterns': game_session['patterns'],
             'created_timestamp': game_session['created_timestamp'],
             'last_active_timestamp': game_session['last_active_timestamp']}
@@ -82,6 +85,7 @@ def submit_guess(game_session: dict[str, str | wordle.Wordle | int | list[str]],
     if not pattern or pattern is None:
         return None
 
+    game_session['guesses'].append(word)
     game_session['patterns'].append(helpers.pattern_to_emoji(pattern))
     game_session['current_tries'] = game_session['current_tries'] + 1
     game_session['last_active_timestamp'] = int(time.time())
