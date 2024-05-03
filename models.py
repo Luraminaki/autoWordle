@@ -73,6 +73,10 @@ def get_guess_stats(game_session: dict[str, str | wordle.Wordle | int | list[str
                                            pool_letters_dupes,
                                            game_session['game_session'].letter_extractor)
 
+    if game_session['game_mode'] == helpers.GAME_MODE_SOLVE:
+        game_session['guesses'].append(word)
+        game_session['patterns'].append(helpers.pattern_to_emoji(pattern))
+
     return {'pool_words': pool,
             'pool_letters': pool_letters,
             'pool_letters_dupes': pool_letters_dupes,
