@@ -59,7 +59,7 @@ def get_word_to_guess(game_session: dict[str, str | wordle.Wordle | int | list[s
     return ''.join(chr(ord_letter) for ord_letter in game_session['game_session'].word)
 
 
-def get_guess_stats(game_session: dict[str, str | wordle.Wordle | int | list[str]], word: str, pattern: str) -> dict | dict[str, list[tuple[tuple[int], float]] | set[int], dict[str, int] | list[list[tuple[tuple[int], float]]] | float]:
+def get_guess_stats(game_session: dict[str, str | wordle.Wordle | int | list[str]], word: str, pattern: str) -> dict | dict[str, list[tuple[tuple[int], float]] | set[int] | dict[str, int] | list[list[tuple[tuple[int], float]]] | float]:
     if game_session['game_mode'] == helpers.GAME_MODE_PLAY:
         return {}
 
