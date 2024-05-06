@@ -76,6 +76,7 @@ def get_guess_stats(game_session: dict[str, str | wordle.Wordle | int | list[str
     if game_session['game_mode'] == helpers.GAME_MODE_SOLVE:
         game_session['guesses'].append(word)
         game_session['patterns'].append(helpers.pattern_to_emoji(pattern))
+        game_session['last_active_timestamp'] = int(time.time())
 
     return {'pool_words': pool,
             'pool_letters': pool_letters,
