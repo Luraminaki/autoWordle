@@ -10,6 +10,8 @@ Created on Mon Apr 15 15:25:51 2024
 #===================================================================================================
 import time
 import uuid
+import json
+import pathlib
 from pydantic import BaseModel
 
 #pylint: disable=wrong-import-position, wrong-import-order
@@ -24,6 +26,31 @@ class Config(BaseModel):
     dict_path: str
     exhaustive: bool
     word_lenght: int
+
+
+def init_app_sources() -> dict[str, dict[str, pathlib.Path | list[dict[str, pathlib.Path | int | helpers.LangLauncher]]]]:
+    cwd = pathlib.Path.cwd()
+
+    config_file = 'config.json'
+
+    with open(cwd/config_file, encoding='utf-8') as f:
+        conf: dict[str, str] = json.load(f)
+
+    data_files = pathlib.Path(cwd/conf["data_folder"]).glob('*.txt')
+    lang_files: list[pathlib.Path] = []
+    exhaustive_files: list[pathlib.Path] = []
+
+    for file in data_files:
+        if '_' not in file.name:
+            lang_files.append(file)
+
+        else:
+            exhaustive_files.append(file)
+
+    app_sources = helpers.init_lang_app_data(lang_files, exhaustive_files)
+    app_sources.update(conf)
+
+    return app_sources
 
 
 def init_lang_launcher(config: Config) -> helpers.LangLauncher:
