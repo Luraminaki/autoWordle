@@ -16,7 +16,7 @@ import random
 from copy import deepcopy
 
 #pylint: disable=wrong-import-position, wrong-import-order
-import helpers
+from modules import helpers
 #pylint: enable=wrong-import-position, wrong-import-order
 #===================================================================================================
 

@@ -39,7 +39,7 @@ GAME_MODE_ASSISTED = 2
 
 
 class LangLauncher():
-    def __init__(self, words_path: str, compute_best_opening: bool=False, word_lenght: int=5, threads: int=0) -> None:
+    def __init__(self, words_path: str | pathlib.Path, compute_best_opening: bool=False, word_lenght: int=5, threads: int=0) -> None:
         curr_func = inspect.currentframe().f_code.co_name
 
         tic = time.perf_counter()
@@ -49,7 +49,10 @@ class LangLauncher():
         self.threads = threads
 
         print(f"{curr_func} -- Acquiring file {words_path}...")
-        words_file = pathlib.Path(words_path).expanduser()
+        if isinstance(words_path, str):
+            words_file = pathlib.Path(words_path).expanduser()
+        else:
+            words_file = words_path
 
         print(f"{curr_func} -- Building word list...")
         self.words = get_words_list(words_file, self.word_lenght)
@@ -58,7 +61,7 @@ class LangLauncher():
         print(f"{curr_func} -- Found {len(self.words)} words...")
 
         print(f"{curr_func} -- Building pattern compendium...")
-        saved_compendium_path = words_path.replace(words_file.name, words_file.stem + "_" + str(self.word_lenght) + "_compendium.pkl")
+        saved_compendium_path = str(words_path).replace(words_file.name, words_file.stem + "_" + str(self.word_lenght) + "_compendium.pkl")
         saved_compendium_file = pathlib.Path(saved_compendium_path).expanduser()
         if saved_compendium_file.is_file():
             self.pattern_compendium = pickle.load(saved_compendium_file.open('rb'))
@@ -69,7 +72,7 @@ class LangLauncher():
 
         self.words_information: list | list[tuple[tuple[int], float]] = []
         if self.compute_best_opening:
-            saved_words_information_path = words_path.replace(words_file.name, words_file.stem + "_" + str(self.word_lenght) + "_info" + words_file.suffix)
+            saved_words_information_path = str(words_path).replace(words_file.name, words_file.stem + "_" + str(self.word_lenght) + "_info" + words_file.suffix)
             saved_words_information_file = pathlib.Path(saved_words_information_path).expanduser()
 
             if saved_words_information_file.is_file():
@@ -84,6 +87,27 @@ class LangLauncher():
         tac = time.perf_counter() - tic
 
         print(f"{curr_func} -- Language launcher for {words_file.name} initialised in {round(tac, 2)} second(s)")
+
+
+def init_lang_app_data(lang_files: list[pathlib.Path], exhautsive_files: list[pathlib.Path]) -> dict[str, dict[str, pathlib.Path | list[dict[str, pathlib.Path | int | LangLauncher]]]]:
+    curr_func = inspect.currentframe().f_code.co_name
+
+    app_sources: dict[str, dict[str, pathlib.Path | list[dict[str, pathlib.Path | int | LangLauncher]]]] = {}
+
+    for lang_file in lang_files:
+        print(f"{curr_func} -- Found language <{lang_file.stem}>...")
+        app_sources[lang_file.stem] = {'path': lang_file,
+                                       'pre_computed': []}
+
+        for exhautsive_file in exhautsive_files:
+            if lang_file.stem in exhautsive_file.stem:
+                word_lenght = int(exhautsive_file.stem.split('_')[1])
+                pre_computed = {'path': exhautsive_file,
+                                'lenght': word_lenght,
+                                'lang_launcher': LangLauncher(lang_file, True, word_lenght)}
+                app_sources[lang_file.stem]['pre_computed'].append(pre_computed)
+
+    return app_sources
 
 
 def get_words_list(path: pathlib.Path, word_lenght: int=5) -> set | set[tuple[int]]:
