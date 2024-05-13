@@ -8,6 +8,7 @@ Created on Tue Apr 02 10:20:51 2024
 """
 
 #===================================================================================================
+import enum
 import time
 import inspect
 import pathlib
@@ -33,9 +34,20 @@ MISS = 0
 MISPLACED = 1
 EXACT = 2
 
-GAME_MODE_PLAY = 0
-GAME_MODE_SOLVE = 1
-GAME_MODE_ASSISTED = 2
+
+class GameMode(enum.Enum):
+    GAME_MODE_PLAY = enum.auto()
+    GAME_MODE_SOLVE = enum.auto()
+    GAME_MODE_ASSISTED = enum.auto()
+
+
+class StatusFunction(enum.Enum):
+    SUCCESS = enum.auto()
+    FAIL = enum.auto()
+    ONGOING = enum.auto()
+    DONE = enum.auto()
+    ERROR = enum.auto()
+    WARNING = enum.auto()
 
 
 class LangLauncher():
@@ -89,15 +101,15 @@ class LangLauncher():
         print(f"{curr_func} -- Language launcher for {words_file.name} initialised in {round(tac, 2)} second(s)")
 
 
-def init_lang_app_data(lang_files: list[pathlib.Path], exhautsive_files: list[pathlib.Path]) -> dict[str, dict[str, pathlib.Path | list[dict[str, pathlib.Path | int | LangLauncher]]]]:
+def init_lang_app_data(lang_files: list[pathlib.Path], exhautsive_files: list[pathlib.Path]) -> dict[str, dict[str, pathlib.Path | dict[str, dict[str, pathlib.Path | int | LangLauncher]]]]:
     curr_func = inspect.currentframe().f_code.co_name
 
-    app_sources: dict[str, dict[str, pathlib.Path | list[dict[str, pathlib.Path | int | LangLauncher]]]] = {}
+    app_sources: dict[str, dict[str, pathlib.Path | dict[str, dict[str, pathlib.Path | int | LangLauncher]]]] = {}
 
     for lang_file in lang_files:
         print(f"{curr_func} -- Found language <{lang_file.stem}>...")
         app_sources[lang_file.stem] = {'path': lang_file,
-                                       'pre_computed': []}
+                                       'pre_computed': {}}
 
         for exhautsive_file in exhautsive_files:
             if lang_file.stem in exhautsive_file.stem:
@@ -105,7 +117,7 @@ def init_lang_app_data(lang_files: list[pathlib.Path], exhautsive_files: list[pa
                 pre_computed = {'path': exhautsive_file,
                                 'lenght': word_lenght,
                                 'lang_launcher': LangLauncher(lang_file, True, word_lenght)}
-                app_sources[lang_file.stem]['pre_computed'].append(pre_computed)
+                app_sources[lang_file.stem]['pre_computed'][str(word_lenght)] = pre_computed
 
     return app_sources
 
