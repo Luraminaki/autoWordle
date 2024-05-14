@@ -13,8 +13,6 @@ import inspect
 
 import random
 
-from copy import deepcopy
-
 #pylint: disable=wrong-import-position, wrong-import-order
 from modules import helpers
 #pylint: enable=wrong-import-position, wrong-import-order
@@ -51,7 +49,7 @@ class Wordle ():
 
 
     def reset(self) -> None:
-        self.pool_words = deepcopy(self.language_launcher.words)
+        self.pool_words = self.language_launcher.words.copy()
         self.information = -helpers.safe_log2(1.0/float(len(self.pool_words)))
         self.word = random.choice(list(self.pool_words))
 
@@ -151,7 +149,7 @@ def main() -> None:
         cptr_tries = 0
         while cptr_tries < max_tries*2:
             print("-------------------------------------------------------------")
-            print(f"{curr_func} -- Attempt n° {cptr_tries + 1} -- Trying word: {guess}")
+            print(f"{curr_func} -- Attempt n° {cptr_tries + 1} -- Trying word: {guess} -- {len(language_launcher.words)}")
 
             pattern = game.submit_guess(guess)
             if pattern == tuple([helpers.EXACT]*max_chars):
