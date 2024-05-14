@@ -2,5 +2,8 @@
     "service_id": "wordle",
     "version": "0.1.0",
     "logging_level": "INFO",
-    "data_folder": "data/"
+    "data_folder": "data/",
+    "compute_best_opening": true,
+    "MAX_SESSIONS": 5,
+    "SESSION_TTL_SECONDS": 1800
 }

@@ -101,22 +101,27 @@ class LangLauncher():
         print(f"{curr_func} -- Language launcher for {words_file.name} initialised in {round(tac, 2)} second(s)")
 
 
-def init_lang_app_data(lang_files: list[pathlib.Path], exhautsive_files: list[pathlib.Path]) -> dict[str, dict[str, pathlib.Path | dict[str, dict[str, pathlib.Path | int | LangLauncher]]]]:
+    def __str__ (self) -> str:
+        return self.__class__.__name__
+
+
+def init_lang_app_data(lang_files: list[pathlib.Path], exhautsive_files: list[pathlib.Path], compute_best_opening: bool=False, client: bool=False) -> dict[str, dict[str, str | pathlib.Path | dict[str, dict[str, str | pathlib.Path | int | LangLauncher]]]]:
     curr_func = inspect.currentframe().f_code.co_name
 
-    app_sources: dict[str, dict[str, pathlib.Path | dict[str, dict[str, pathlib.Path | int | LangLauncher]]]] = {}
+    app_sources: dict[str, dict[str, str | pathlib.Path | dict[str, dict[str, str | pathlib.Path | int | LangLauncher]]]] = {}
 
     for lang_file in lang_files:
         print(f"{curr_func} -- Found language <{lang_file.stem}>...")
-        app_sources[lang_file.stem] = {'path': lang_file,
+        app_sources[lang_file.stem] = {'path': lang_file if not client else lang_file.name,
                                        'pre_computed': {}}
 
         for exhautsive_file in exhautsive_files:
             if lang_file.stem in exhautsive_file.stem:
                 word_lenght = int(exhautsive_file.stem.split('_')[1])
-                pre_computed = {'path': exhautsive_file,
+
+                pre_computed = {'path': exhautsive_file if not client else exhautsive_file.name,
                                 'lenght': word_lenght,
-                                'lang_launcher': LangLauncher(lang_file, True, word_lenght)}
+                                'lang_launcher': LangLauncher(lang_file, compute_best_opening, word_lenght) if not client else str(LangLauncher)}
                 app_sources[lang_file.stem]['pre_computed'][str(word_lenght)] = pre_computed
 
     return app_sources
@@ -186,6 +191,11 @@ def compute_pattern(guess: tuple[int], word: tuple[int]) -> tuple | tuple[int]:
 def pattern_to_emoji(pattern: tuple[int]) -> str:
     d = {MISS: "⬛", MISPLACED: "🟨", EXACT: "🟩"}
     return "".join(d[x] for x in pattern)
+
+
+def emoji_to_pattern(pattern: str) -> str:
+    d = {"⬛": MISS, "🟨": MISPLACED, "🟩": EXACT}
+    return "".join(str(d[x]) for x in pattern)
 
 
 def build_letter_extractor(guess: tuple[int], pattern: tuple[int]) -> dict[str, dict] | dict[str, dict[str, int]]:

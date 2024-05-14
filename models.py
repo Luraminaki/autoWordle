@@ -11,6 +11,7 @@ Created on Mon Apr 15 15:25:51 2024
 import time
 import uuid
 import json
+import inspect
 import pathlib
 from pydantic import BaseModel
 
@@ -31,7 +32,7 @@ class Config(BaseModel):
     word_lenght: int
 
 
-def init_app_sources() -> dict[str, dict[str, pathlib.Path | dict[str, dict[str, pathlib.Path | int | helpers.LangLauncher]]]]:
+def init_app_sources(client: bool=False) -> dict[str, dict[str, str | pathlib.Path | dict[str, dict[str, str | pathlib.Path | int | helpers.LangLauncher]] | int] | str | int | bool]:
     cwd = pathlib.Path.cwd()
 
     config_file = 'config.json'
@@ -50,8 +51,14 @@ def init_app_sources() -> dict[str, dict[str, pathlib.Path | dict[str, dict[str,
         else:
             exhaustive_files.append(file)
 
-    app_sources = helpers.init_lang_app_data(lang_files, exhaustive_files)
+    app_sources = helpers.init_lang_app_data(lang_files,
+                                             exhaustive_files,
+                                             compute_best_opening=not client if client else conf.get('compute_best_opening', False),
+                                             client=client)
     app_sources.update(conf)
+
+    game_modes = {g.name: g.value for g in helpers.GameMode}
+    app_sources.update({"game_modes": game_modes})
 
     return app_sources
 
@@ -61,7 +68,15 @@ def init_lang_launcher(config: Config) -> helpers.LangLauncher:
 
 
 def create_game_session(lang_launcher: helpers.LangLauncher, game_mode: str, max_tries: int=6) -> dict[str, str | wordle.Wordle | int | list[str]]:
+    curr_func = inspect.currentframe().f_code.co_name
+
+    if not lang_launcher.compute_best_opening and game_mode != helpers.GameMode.GAME_MODE_PLAY.name:
+        return {}
+
     session_uuid = str(uuid.uuid4())
+
+    print(f"{curr_func} -- Creating game_session {session_uuid}")
+
     return {'session_uuid': session_uuid,
             'game_session': wordle.Wordle(lang_launcher),
             'game_mode': game_mode,
@@ -83,7 +98,7 @@ def reset_game_session(game_session: dict[str, str | wordle.Wordle | int | list[
     game_session['last_active_timestamp'] = int(time.time())
 
 
-def get_session_stats(game_session: dict[str, str | wordle.Wordle | int | list[str]]) -> dict[str, str | int | list[str]]:
+def get_game_session_stats(game_session: dict[str, str | wordle.Wordle | int | list[str]]) -> dict[str, str | int | list[str]]:
     return {'game_mode': game_session['game_mode'],
             'max_tries': game_session['max_tries'],
             'current_tries': game_session['current_tries'],
@@ -127,7 +142,7 @@ def submit_guess(game_session: dict[str, str | wordle.Wordle | int | list[str]],
     if game_session['current_tries'] >= game_session['max_tries']:
         return None
 
-    pattern = game_session['game_session'].submit_guess((ord(letter) for letter in word))
+    pattern = game_session['game_session'].submit_guess(word)
 
     if not pattern or pattern is None:
         return None
