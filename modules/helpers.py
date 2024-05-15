@@ -204,7 +204,7 @@ def build_letter_extractor(guess: tuple[int], pattern: tuple[int]) -> dict[str, 
     for pos, letter in enumerate(guess):
         letter_chr = chr(letter)
 
-        if pattern[pos] in (MISPLACED, EXACT):
+        if pattern[pos] != MISS:
             if extractor["incl"].get(letter_chr, None) is None:
                 extractor["incl"][letter_chr] = 1
                 continue
