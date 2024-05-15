@@ -16,7 +16,7 @@ import pathlib
 from pydantic import BaseModel
 
 #pylint: disable=wrong-import-position, wrong-import-order
-from modules import helpers, wordle
+from modules import statics, helpers, computing, wordle
 #pylint: enable=wrong-import-position, wrong-import-order
 #===================================================================================================
 
@@ -57,7 +57,7 @@ def init_app_sources(client: bool=False) -> dict[str, dict[str, str | pathlib.Pa
                                              client=client)
     app_sources.update(conf)
 
-    game_modes = {g.name: g.value for g in helpers.GameMode}
+    game_modes = {g.name: g.value for g in statics.GameMode}
     app_sources.update({"game_modes": game_modes})
 
     return app_sources
@@ -70,7 +70,7 @@ def init_lang_launcher(config: Config) -> helpers.LangLauncher:
 def create_game_session(lang_launcher: helpers.LangLauncher, game_mode: str, max_tries: int=6) -> dict[str, str | wordle.Wordle | int | list[str]]:
     curr_func = inspect.currentframe().f_code.co_name
 
-    if not lang_launcher.compute_best_opening and game_mode != helpers.GameMode.GAME_MODE_PLAY.name:
+    if not lang_launcher.compute_best_opening and game_mode != statics.GameMode.GAME_MODE_PLAY.name:
         return {}
 
     session_uuid = str(uuid.uuid4())
@@ -113,22 +113,22 @@ def get_word_to_guess(game_session: dict[str, str | wordle.Wordle | int | list[s
 
 
 def get_guess_stats(game_session: dict[str, str | wordle.Wordle | int | list[str]], word: str, pattern: str) -> dict | dict[str, list[tuple[tuple[int], float]] | set[int] | dict[str, int] | list[list[tuple[tuple[int], float]]] | float]:
-    if game_session['game_mode'] == helpers.GameMode.GAME_MODE_PLAY.name:
+    if game_session['game_mode'] == statics.GameMode.GAME_MODE_PLAY.name:
         return {}
 
     pool = game_session['game_session'].submit_guess_and_pattern(word, pattern)
-    game_session['game_session'].letter_extractor = helpers.update_letter_extractor(game_session['game_session'].letter_extractor,
-                                                                                    helpers.build_letter_extractor(tuple(ord(letter) for letter in word),
-                                                                                                                   tuple(int(p) for p in pattern)))
-    pool_letters, pool_letters_dupes = helpers.gather_pool_letters(pool)
-    suggestions = helpers.build_suggestion(game_session['game_session'].language_launcher.words_information,
-                                           pool_letters,
-                                           pool_letters_dupes,
-                                           game_session['game_session'].letter_extractor)
+    game_session['game_session'].letter_extractor = computing.update_letter_extractor(game_session['game_session'].letter_extractor,
+                                                                                      computing.build_letter_extractor(tuple(ord(letter) for letter in word),
+                                                                                                                       tuple(int(p) for p in pattern)))
+    pool_letters, pool_letters_dupes = computing.gather_pool_letters(pool)
+    suggestions = computing.build_suggestion(game_session['game_session'].language_launcher.words_information,
+                                             pool_letters,
+                                             pool_letters_dupes,
+                                             game_session['game_session'].letter_extractor)
 
-    if game_session['game_mode'] == helpers.GameMode.GAME_MODE_SOLVE.name:
+    if game_session['game_mode'] == statics.GameMode.GAME_MODE_SOLVE.name:
         game_session['guesses'].append(word)
-        game_session['patterns'].append(helpers.pattern_to_emoji(pattern))
+        game_session['patterns'].append(statics.pattern_to_emoji(pattern))
         game_session['last_active_timestamp'] = int(time.time())
 
     return {'pool_words': pool,
@@ -148,7 +148,7 @@ def submit_guess(game_session: dict[str, str | wordle.Wordle | int | list[str]],
         return None
 
     game_session['guesses'].append(word)
-    game_session['patterns'].append(helpers.pattern_to_emoji(pattern))
+    game_session['patterns'].append(statics.pattern_to_emoji(pattern))
     game_session['current_tries'] = game_session['current_tries'] + 1
     game_session['last_active_timestamp'] = int(time.time())
 
