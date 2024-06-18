@@ -10,6 +10,7 @@ Created on Wed May 15 15:10:51 2024
 #===================================================================================================
 import enum
 
+import itertools as it
 #pylint: disable=wrong-import-position, wrong-import-order
 
 #pylint: enable=wrong-import-position, wrong-import-order
@@ -51,3 +52,7 @@ def emoji_to_pattern(pattern: str) -> str:
          "🟨": StatusLetter.MISPLACED.value,
          "🟩": StatusLetter.EXACT.value}
     return "".join(str(d[x]) for x in pattern)
+
+
+def pattern_permutations(word_lenght: int=5) -> set | set[tuple[int]]:
+    return set(it.product([StatusLetter.MISS, StatusLetter.MISPLACED, StatusLetter.EXACT], repeat=word_lenght))
