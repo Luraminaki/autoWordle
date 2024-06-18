@@ -1,3 +1,4 @@
 fastapi
 fastapi-cli
+sqlite3
 unidecode
