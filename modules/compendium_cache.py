@@ -69,6 +69,27 @@ class CacheDB:
                 print(f"{curr_func} -- Failed to create db: {repr(err)}")
 
 
+    def _toggle_optimisation(self, toggle: bool) -> bool:
+        curr_func = inspect.currentframe().f_code.co_name
+
+        if toggle:
+            pragmas = {"synchronous": "OFF", "journal_mode": "OFF", "locking_mode": "EXCLUSIVE", "temp_store": "MEMORY"}
+
+        else:
+            pragmas = {"synchronous": "ON", "journal_mode": "ON", "locking_mode": "NORMAL", "temp_store": "DEFAULT"}
+
+        try:
+            with self.lock:
+                with self.db:
+                    for key, value in pragmas.items():
+                        self.db.execute(f"PRAGMA {key} = {value}")
+            return True
+
+        except Exception as err:
+            print(f"{curr_func} -- Failed to toggle optimisation to {toggle}: {repr(err)}")
+            return False
+
+
     def _is_valid_column(self, col: str) -> bool:
         return col.lower() in self.columns or col=='*'
 
@@ -185,11 +206,12 @@ class CacheDB:
         # print(f"{curr_func} -- Adding entry {data} to {table_name}")
 
         try:
+            if not self._toggle_optimisation(True):
+                return False
+
             with self.lock:
                 with self.db:
                     try:
-                        self.db.execute("PRAGMA synchronous = OFF")
-                        self.db.execute("PRAGMA journal_mode = OFF")
                         for entry in datas:
                             data = { key: try_process_to_str_or_null_str(value) for (key, value) in entry.items() if key in self.columns }
                             self.db.execute(f'INSERT INTO "{table_name}" ({", ".join(data.keys())}) VALUES ({", ".join(data.values())})')
@@ -198,10 +220,11 @@ class CacheDB:
                         print(f"{curr_func} -- Failed to INSERT {table_name} entry with {data}: {repr(err)}")
 
         except Exception as err:
+            self._toggle_optimisation(False)
             print(f"{curr_func} -- Failed to INSERT {table_name} entry with {datas}: {repr(err)}")
             return False
 
-        return True
+        return self._toggle_optimisation(False)
 
 
     def get_entries(self, table_name: str | int | tuple[int], columns: set[str] | tuple[str]=(), constraints: str="", **kwargs) -> list[dict[str, int | float | str]]:
