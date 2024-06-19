@@ -62,6 +62,7 @@ async def create_game_session(lang: str, word_lenght: int, max_tries: int, game_
             return { 'status': statics.StatusFunction.ERROR.name, 'error': 'MAX_SESSIONS limit reached' }
 
         game_session = models.create_game_session(APP_SOURCES.get(lang.lower(), {}).get('pre_computed', {}).get(str(word_lenght), {}).get('lang_launcher'),
+                                                  APP_SOURCES.get('compute_best_opening', False),
                                                   game_mode, max_tries)
         APP_SESSIONS.update({game_session['session_uuid']: game_session})
 

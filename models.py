@@ -67,10 +67,10 @@ def init_lang_launcher(config: Config) -> helpers.LangLauncher:
     return helpers.LangLauncher(config.dict_path, config.exhaustive, config.word_lenght)
 
 
-def create_game_session(lang_launcher: helpers.LangLauncher, game_mode: str, max_tries: int=6) -> dict[str, str | wordle.Wordle | int | list[str]]:
+def create_game_session(lang_launcher: helpers.LangLauncher, compute_best_opening: bool, game_mode: str, max_tries: int=6) -> dict[str, str | wordle.Wordle | int | list[str]]:
     curr_func = inspect.currentframe().f_code.co_name
 
-    if not lang_launcher.compute_best_opening and game_mode != statics.GameMode.GAME_MODE_PLAY.name:
+    if not compute_best_opening and game_mode != statics.GameMode.GAME_MODE_PLAY.name:
         return {}
 
     session_uuid = str(uuid.uuid4())
