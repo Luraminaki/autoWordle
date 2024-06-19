@@ -72,11 +72,12 @@ class CacheDB:
     def _toggle_optimisation(self, toggle: bool) -> bool:
         curr_func = inspect.currentframe().f_code.co_name
 
+        # https://avi.im/blag/2021/fast-sqlite-inserts/
         if toggle:
-            pragmas = {"synchronous": "OFF", "journal_mode": "OFF", "locking_mode": "EXCLUSIVE", "temp_store": "MEMORY"}
+            pragmas = {"journal_mode": "OFF", "synchronous": "OFF", "temp_store": "MEMORY",  "locking_mode": "EXCLUSIVE"}
 
         else:
-            pragmas = {"synchronous": "ON", "journal_mode": "ON", "locking_mode": "NORMAL", "temp_store": "DEFAULT"}
+            pragmas = {"journal_mode": "ON",  "synchronous": "ON",  "temp_store": "DEFAULT", "locking_mode": "NORMAL"}
 
         try:
             with self.lock:
@@ -197,7 +198,8 @@ class CacheDB:
             if not isinstance(value, list):
                 return False
 
-        datas: list[dict[str, str]] = [dict(zip(kwargs, value)) for value in zip(*kwargs.values())]
+        # datas: list[dict[str, str]] = [dict(zip(kwargs, value)) for value in zip(*kwargs.values())]
+        datas = list(zip(*kwargs.values()))
 
         if not datas:
             print(f"{curr_func} -- Failed to INSERT {table_name} empty entry")
@@ -212,16 +214,17 @@ class CacheDB:
             with self.lock:
                 with self.db:
                     try:
-                        for entry in datas:
-                            data = { key: try_process_to_str_or_null_str(value) for (key, value) in entry.items() if key in self.columns }
-                            self.db.execute(f'INSERT INTO "{table_name}" ({", ".join(data.keys())}) VALUES ({", ".join(data.values())})')
+                        self.db.executemany(f'INSERT INTO "{table_name}" ({", ".join(kwargs.keys())}) VALUES ({",".join("?"*len(kwargs.keys()))})', datas)
+                        # for entry in datas:
+                        #     data = { key: try_process_to_str_or_null_str(value) for (key, value) in entry.items() if key in self.columns }
+                        #     self.db.execute(f'INSERT INTO "{table_name}" ({", ".join(data.keys())}) VALUES ({", ".join(data.values())})')
 
                     except Exception as err:
-                        print(f"{curr_func} -- Failed to INSERT {table_name} entry with {data}: {repr(err)}")
+                        print(f"{curr_func} -- Failed to INSERT {table_name} entries: {repr(err)}")
 
         except Exception as err:
             self._toggle_optimisation(False)
-            print(f"{curr_func} -- Failed to INSERT {table_name} entry with {datas}: {repr(err)}")
+            print(f"{curr_func} -- Failed to INSERT {table_name} entries: {repr(err)}")
             return False
 
         return self._toggle_optimisation(False)
