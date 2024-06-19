@@ -192,12 +192,12 @@ def compute_word_entropy_faster_worker(pool_words_chunk: set[tuple[int]], patter
         return_dict_entropy[word] = compute_word_entropy_faster(word, pattern_compendium, nbr_words)
 
 
-def compute_words_information_faster(pool_words: set[tuple[int]], threads: int=0) -> list | list[tuple[tuple[int], float]]:
+def compute_words_information_faster(pool_words: set[tuple[int]],
+                                     pattern_compendium: dict[str, set[tuple[tuple[int]]]], threads: int=0) -> list | list[tuple[tuple[int], float]]:
     curr_func = inspect.currentframe().f_code.co_name
 
     words_information: list | list[tuple[tuple[int], float]] = []
     pool_words_chunked, return_dict_entropy, jobs = prepare_worker_datas(pool_words, threads)
-    pattern_compendium = build_pattern_compendium(pool_words)
 
     for pool_words_chunk in pool_words_chunked:
         jobs.append(Process(target=compute_word_entropy_faster_worker,

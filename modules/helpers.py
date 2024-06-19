@@ -16,7 +16,7 @@ import pickle
 import unidecode
 
 #pylint: disable=wrong-import-position, wrong-import-order
-from modules import computing
+from modules import computing, compendium_cache
 #pylint: enable=wrong-import-position, wrong-import-order
 #===================================================================================================
 
@@ -32,7 +32,6 @@ class LangLauncher():
 
         tic = time.perf_counter()
 
-        self.compute_best_opening = compute_best_opening
         self.word_lenght = word_lenght
         self.threads = threads
 
@@ -48,8 +47,8 @@ class LangLauncher():
             raise ValueError
         print(f"{curr_func} -- Found {len(self.words)} words...")
 
-        self.pattern_compendium: dict | dict[str, set[tuple[tuple[int]]]] = self.build_pattern_compendium(self.compute_best_opening)
-        self.words_information: list | list[tuple[tuple[int], float]] = self.compute_words_information(self.compute_best_opening)
+        self.words_information = self.compute_words_information(compute_best_opening)
+        self.cache = self.load_build_cache_compendium()
 
         tac = time.perf_counter() - tic
 
@@ -61,17 +60,52 @@ class LangLauncher():
 
 
     def get_couples_from_compendium(self, pattern: str) -> set | set[tuple[tuple[int]]]:
-        if self.compute_best_opening:
-            return self.pattern_compendium.get(pattern, {})
+        if self.cache is None:
+            return set()
 
-        return set() #TODO SQL database call here
+        couples: set[tuple[tuple[int]]] = set()
+
+        for result in self.cache.get_entries(pattern):
+            couples.add(tuple(tuple(ord(letter) for letter in value) for key, value in result.items() if key != "__pkid"))
+
+        return couples
 
 
-    def build_pattern_compendium(self, build_compendium: bool) -> dict | dict[str, set[tuple[tuple[int]]]]:
+    def load_build_cache_compendium(self, pattern_compendium: dict[str, set[tuple[tuple[int]]]]=None) -> None | compendium_cache.CacheDB:
         curr_func = inspect.currentframe().f_code.co_name
 
-        if not build_compendium:
-            return {}
+        saved_cache_path = str(self.words_file).replace(self.words_file.name,
+                                                        f"{self.words_file.stem}_{str(self.word_lenght)}_compendium.sqlite")
+        saved_cache_file = pathlib.Path(saved_cache_path).expanduser()
+
+        if saved_cache_file.exists():
+            return compendium_cache.CacheDB(saved_cache_file, guess="TEXT", word="TEXT")
+
+        if pattern_compendium is None:
+            print(f"{curr_func} -- {saved_cache_path} does not exists and pattern compendium was not provided... First time here?")
+            return None
+
+        print(f"{curr_func} -- Building cache compendium...")
+        cache = compendium_cache.CacheDB(saved_cache_file, set(pattern_compendium.keys()), guess="TEXT", word="TEXT")
+
+        tic = time.perf_counter()
+
+        cptr = 0
+        for pattern, combinations in pattern_compendium.items():
+            guesses = ["".join(chr(letter_ord) for letter_ord in pair[0]) for pair in combinations]
+            words   = ["".join(chr(letter_ord) for letter_ord in pair[-1]) for pair in combinations]
+
+            cache.add_entries(pattern, guess=guesses, word=words)
+            cptr = cptr + len(guesses)
+
+        tac = time.perf_counter() - tic
+
+        print(f"{curr_func} -- Added {cptr} entries in cache compendium in {round(tac, 2)} second(s)...")
+        return cache
+
+
+    def build_pattern_compendium(self) -> dict | dict[str, set[tuple[tuple[int]]]]:
+        curr_func = inspect.currentframe().f_code.co_name
 
         print(f"{curr_func} -- Building pattern compendium...")
         pattern_compendium: dict | dict[str, set[tuple[tuple[int]]]] = {}
@@ -79,11 +113,14 @@ class LangLauncher():
         saved_compendium_path = str(self.words_file).replace(self.words_file.name,
                                                              f"{self.words_file.stem}_{str(self.word_lenght)}_compendium.pkl")
         saved_compendium_file = pathlib.Path(saved_compendium_path).expanduser()
-        if saved_compendium_file.is_file():
+
+        if saved_compendium_file.exists():
             pattern_compendium = pickle.load(saved_compendium_file.open('rb'))
+
         else:
             pattern_compendium = computing.build_pattern_compendium(self.words)
             pickle.dump(pattern_compendium, saved_compendium_file.open('wb'))
+
         print(f"{curr_func} -- Found {len(pattern_compendium)} patterns...")
 
         return pattern_compendium
@@ -98,14 +135,16 @@ class LangLauncher():
                                                                     f"{self.words_file.stem}_{str(self.word_lenght)}_info{self.words_file.suffix}")
         saved_words_information_file = pathlib.Path(saved_words_information_path).expanduser()
 
-        if saved_words_information_file.is_file():
+        if saved_words_information_file.exists():
             print(f"{curr_func} -- Loading exhaustive information for best opening...")
             words_information = load_words_information(saved_words_information_file)
 
         elif compute_best_opening:
-            print(f"{curr_func} -- Computing exhaustive information for best opening...")
-            words_information = computing.compute_words_information_faster(self.words, self.threads)
-            save_words_information(saved_words_information_file, self.words_information)
+            print(f"{curr_func} -- Computing and saving exhaustive information for best opening...")
+            pattern_compendium = self.build_pattern_compendium()
+            self.load_build_cache_compendium(pattern_compendium)
+            # words_information = computing.compute_words_information_faster(self.words, pattern_compendium, self.threads)
+            # save_words_information(saved_words_information_file, self.words_information)
 
         else:
             pass

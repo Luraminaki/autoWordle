@@ -13,7 +13,7 @@ from fastapi import FastAPI
 
 #pylint: disable=wrong-import-position, wrong-import-order
 import models
-from modules import helpers, statics
+from modules import statics
 #pylint: enable=wrong-import-position, wrong-import-order
 #===================================================================================================
 
