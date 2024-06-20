@@ -10,6 +10,7 @@ Created on Wed May 15 15:10:51 2024
 #===================================================================================================
 import inspect
 
+import time
 import random
 
 #pylint: disable=wrong-import-position, wrong-import-order
@@ -131,7 +132,7 @@ def slow_test(language_launcher: helpers.LangLauncher, word: tuple[int],
 
 
 def show_stats(nb_suggestion_used: list[int], nb_guesses: list[int],
-               max_games: int, max_tries: int, cptr_games: int):
+               max_games: int, max_tries: int, cptr_games: int, tac: float):
     curr_func = inspect.currentframe().f_code.co_name
 
     nb_guesses.sort()
@@ -149,7 +150,7 @@ def show_stats(nb_suggestion_used: list[int], nb_guesses: list[int],
     median_suggestion_used = nb_suggestion_used[cptr_games // 2] if cptr_games % 2 == 0 else (nb_suggestion_used[cptr_games // 2] + nb_suggestion_used[(cptr_games // 2) + 1]) / 2
     game_where_sugg_used = max_games - nb_suggestion_used.count(0)
 
-    print(f"{curr_func} -- END -- Played {cptr_games} games")
+    print(f"{curr_func} -- END -- Played {cptr_games} games in {round(tac, 2)} second(s)")
     print(f"{curr_func} -- END -- Average tries is {round(sum(nb_guesses) / cptr_games, 2)}")
     print(f"{curr_func} -- END -- Median tries is {median_guesses}")
     print(f"{curr_func} -- END -- (Min, Max) tries are ({min(nb_guesses)}, {max(nb_guesses)})")
@@ -175,6 +176,8 @@ def main() -> None:
     nb_guesses: list[int] = []
     nb_suggestion_used: list[int] = []
 
+    tic = time.perf_counter()
+
     cptr_games = 0
     for word in language_launcher.words:
 
@@ -192,7 +195,9 @@ def main() -> None:
         if cptr_games == max_games:
             break
 
-    show_stats(nb_suggestion_used, nb_guesses, max_games, max_tries, cptr_games)
+    tac = time.perf_counter() - tic
+
+    show_stats(nb_suggestion_used, nb_guesses, max_games, max_tries, cptr_games, tac)
 
 
 if __name__ == "__main__":
