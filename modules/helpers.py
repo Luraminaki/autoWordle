@@ -143,8 +143,8 @@ class LangLauncher():
             print(f"{curr_func} -- Computing and saving exhaustive information for best opening...")
             pattern_compendium = self.build_pattern_compendium()
             self.load_build_cache_compendium(pattern_compendium)
-            # words_information = computing.compute_words_information_faster(self.words, pattern_compendium, self.threads)
-            # save_words_information(saved_words_information_file, self.words_information)
+            words_information = computing.compute_words_information_faster(self.words, pattern_compendium, self.threads)
+            save_words_information(saved_words_information_file, self.words_information)
 
         else:
             pass
