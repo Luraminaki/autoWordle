@@ -47,8 +47,8 @@ class LangLauncher():
             raise ValueError
         print(f"{curr_func} -- Found {len(self.words)} words...")
 
+        self.cache: compendium_cache.CacheDB | None = None
         self.words_information = self.compute_words_information(compute_best_opening)
-        self.cache = self.load_build_cache_compendium()
 
         tac = time.perf_counter() - tic
 
@@ -71,22 +71,18 @@ class LangLauncher():
         return couples
 
 
-    def load_build_cache_compendium(self, pattern_compendium: dict[str, set[tuple[tuple[int]]]]=None) -> None | compendium_cache.CacheDB:
+    def load_build_cache_compendium(self, path: pathlib.Path, pattern_compendium: dict[str, set[tuple[tuple[int]]]]=None) -> None | compendium_cache.CacheDB:
         curr_func = inspect.currentframe().f_code.co_name
 
-        saved_cache_path = str(self.words_file).replace(self.words_file.name,
-                                                        f"{self.words_file.stem}_{str(self.word_lenght)}_compendium.sqlite")
-        saved_cache_file = pathlib.Path(saved_cache_path).expanduser()
-
-        if saved_cache_file.exists():
-            return compendium_cache.CacheDB(saved_cache_file, guess="TEXT", word="TEXT")
+        if path.exists():
+            return compendium_cache.CacheDB(path, guess="TEXT", word="TEXT")
 
         if pattern_compendium is None:
-            print(f"{curr_func} -- {saved_cache_path} does not exists and pattern compendium was not provided... First time here?")
+            print(f"{curr_func} -- {path} does not exists and pattern compendium was not provided... First time here?")
             return None
 
         print(f"{curr_func} -- Building cache compendium...")
-        cache = compendium_cache.CacheDB(saved_cache_file, set(pattern_compendium.keys()), guess="TEXT", word="TEXT")
+        cache = compendium_cache.CacheDB(path, set(pattern_compendium.keys()), guess="TEXT", word="TEXT")
 
         tic = time.perf_counter()
 
@@ -104,22 +100,18 @@ class LangLauncher():
         return cache
 
 
-    def build_pattern_compendium(self) -> dict | dict[str, set[tuple[tuple[int]]]]:
+    def build_pattern_compendium(self, path: pathlib.Path) -> dict | dict[str, set[tuple[tuple[int]]]]:
         curr_func = inspect.currentframe().f_code.co_name
 
         print(f"{curr_func} -- Building pattern compendium...")
         pattern_compendium: dict | dict[str, set[tuple[tuple[int]]]] = {}
 
-        saved_compendium_path = str(self.words_file).replace(self.words_file.name,
-                                                             f"{self.words_file.stem}_{str(self.word_lenght)}_compendium.pkl")
-        saved_compendium_file = pathlib.Path(saved_compendium_path).expanduser()
-
-        if saved_compendium_file.exists():
-            pattern_compendium = pickle.load(saved_compendium_file.open('rb'))
+        if path.exists():
+            pattern_compendium = pickle.load(path.open('rb'))
 
         else:
             pattern_compendium = computing.build_pattern_compendium(self.words)
-            pickle.dump(pattern_compendium, saved_compendium_file.open('wb'))
+            pickle.dump(pattern_compendium, path.open('wb'))
 
         print(f"{curr_func} -- Found {len(pattern_compendium)} patterns...")
 
@@ -131,23 +123,22 @@ class LangLauncher():
 
         words_information: list | list[tuple[tuple[int], float]] = []
 
-        saved_words_information_path = str(self.words_file).replace(self.words_file.name,
-                                                                    f"{self.words_file.stem}_{str(self.word_lenght)}_info{self.words_file.suffix}")
-        saved_words_information_file = pathlib.Path(saved_words_information_path).expanduser()
+        compendium_file, cache_file, words_information_file = get_data_paths(self.words_file, self.word_lenght)
 
-        if saved_words_information_file.exists():
+        if words_information_file.exists() and cache_file.exists():
             print(f"{curr_func} -- Loading exhaustive information for best opening...")
-            words_information = load_words_information(saved_words_information_file)
+            words_information = load_words_information(words_information_file)
+            self.cache = self.load_build_cache_compendium(cache_file)
 
         elif compute_best_opening:
             print(f"{curr_func} -- Computing and saving exhaustive information for best opening...")
-            pattern_compendium = self.build_pattern_compendium()
-            self.load_build_cache_compendium(pattern_compendium)
+            pattern_compendium = self.build_pattern_compendium(compendium_file)
+            self.cache = self.load_build_cache_compendium(cache_file, pattern_compendium)
             words_information = computing.compute_words_information_faster(self.words, pattern_compendium, self.threads)
-            save_words_information(saved_words_information_file, self.words_information)
+            save_words_information(words_information_file, self.words_information)
 
         else:
-            pass
+            print(f"{curr_func} -- Nothing to do, 'words_information' and 'cache' are empty, solver is thus unavailable...")
 
         return words_information
 
@@ -193,6 +184,22 @@ def get_words_list(path: pathlib.Path, word_lenght: int=5) -> set | set[tuple[in
                 words.add(tuple(ord(letter) for letter in word))
 
     return words
+
+
+def get_data_paths(words_file: pathlib.Path, word_lenght: int) -> tuple[pathlib.Path, pathlib.Path, pathlib.Path]:
+    compendium_path = str(words_file).replace(words_file.name,
+                                              f"{words_file.stem}_{str(word_lenght)}_compendium.pkl")
+    compendium_file = pathlib.Path(compendium_path).expanduser()
+
+    cache_path = str(words_file).replace(words_file.name,
+                                         f"{words_file.stem}_{str(word_lenght)}_compendium.sqlite")
+    cache_file = pathlib.Path(cache_path).expanduser()
+
+    words_information_path = str(words_file).replace(words_file.name,
+                                                     f"{words_file.stem}_{str(word_lenght)}_info{words_file.suffix}")
+    words_information_file = pathlib.Path(words_information_path).expanduser()
+
+    return compendium_file, cache_file, words_information_file
 
 
 def save_words_information(path: pathlib.Path, words_information: list[tuple[tuple[int], float]]) -> None:
