@@ -153,10 +153,10 @@ def prepare_worker_datas(pool_words: set[tuple[int]], threads: int=0) -> tuple[l
 #####################################
 
 
-def build_pattern_compendium(pool_words: set[tuple[int]]) -> dict | dict[str, set[tuple[tuple[int]]]]:
+def build_pattern_compendium(pool_words: set[tuple[int]]) -> dict | dict[str, set[tuple[tuple[int], tuple[int]]]]:
     pool_words_pile: set[tuple[int]] = deepcopy(pool_words)
 
-    pattern_compendium: dict[str, set[tuple[tuple[int]]]] = {}
+    pattern_compendium: dict[str, set[tuple[tuple[int], tuple[int]]]] = {}
 
     while pool_words_pile:
         word_piled = pool_words_pile.pop()
@@ -176,7 +176,7 @@ def build_pattern_compendium(pool_words: set[tuple[int]]) -> dict | dict[str, se
     return pattern_compendium
 
 
-def compute_word_entropy_faster(word: tuple[int], pattern_compendium: dict[str, set[tuple[tuple[int]]]], nbr_words: int) -> float:
+def compute_word_entropy_faster(word: tuple[int], pattern_compendium: dict[str, set[tuple[tuple[int], tuple[int]]]], nbr_words: int) -> float:
     entropy = 0.0
 
     for _, compendium in pattern_compendium.items():
@@ -186,14 +186,14 @@ def compute_word_entropy_faster(word: tuple[int], pattern_compendium: dict[str, 
     return entropy
 
 
-def compute_word_entropy_faster_worker(pool_words_chunk: set[tuple[int]], pattern_compendium: dict[str, set[tuple[tuple[int]]]], nbr_words: int,
+def compute_word_entropy_faster_worker(pool_words_chunk: set[tuple[int]], pattern_compendium: dict[str, set[tuple[tuple[int], tuple[int]]]], nbr_words: int,
                                        return_dict_entropy: managers.DictProxy) -> None:
     for word in pool_words_chunk:
         return_dict_entropy[word] = compute_word_entropy_faster(word, pattern_compendium, nbr_words)
 
 
 def compute_words_information_faster(pool_words: set[tuple[int]],
-                                     pattern_compendium: dict[str, set[tuple[tuple[int]]]], threads: int=0) -> list | list[tuple[tuple[int], float]]:
+                                     pattern_compendium: dict[str, set[tuple[tuple[int], tuple[int]]]], threads: int=0) -> list | list[tuple[tuple[int], float]]:
     curr_func = inspect.currentframe().f_code.co_name
 
     words_information: list | list[tuple[tuple[int], float]] = []
