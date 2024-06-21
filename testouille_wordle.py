@@ -225,6 +225,13 @@ if __name__ == "__main__":
     main()
 
 
+# To run with PyPy
+# - Download PyPy https://www.pypy.org/
+# - Run `pypy -m ensurepip`
+# - Run `pypy -m pip install unidecode`
+# - Run `pypy testouille_wordle.py `
+
+
 # 11th Gen Intel Core i7-1165G7 + SSD Samsung 990 Pro + 24Go RAM
 
 # Test sample: wordle.txt
