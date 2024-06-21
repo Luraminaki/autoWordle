@@ -140,7 +140,7 @@ class LangLauncher():
             pattern_compendium = self.build_pattern_compendium(compendium_file)
             self.cache = self.load_build_cache_compendium(cache_file, pattern_compendium)
             words_information = computing.compute_words_information_faster(self.words, pattern_compendium, self.threads)
-            save_words_information(words_information_file, self.words_information)
+            save_words_information(words_information_file, words_information)
 
         else:
             print(f"{curr_func} -- Nothing to do, 'words_information' and 'cache' are empty, solver is thus unavailable...")
