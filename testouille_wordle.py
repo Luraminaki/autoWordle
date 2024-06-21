@@ -193,6 +193,11 @@ def main() -> None:
 
     language_launcher = helpers.LangLauncher(file_path, best_opening, max_chars, threads)
     max_games = len(language_launcher.words) # 0 and 1 are forbidden !
+
+    if max_games <= 1:
+        print(f"{curr_func} -- ABORTING -- Not enough max_games is {max_games} (Must be greater than 1)")
+        return None
+
     nb_guesses: list[int] = []
     nb_suggestion_used: list[int] = []
 
@@ -220,6 +225,7 @@ def main() -> None:
 
     show_stats(nb_suggestion_used, nb_guesses, max_games, max_tries, cptr_games, tac)
 
+    return None
 
 if __name__ == "__main__":
     main()
