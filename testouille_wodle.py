@@ -223,3 +223,30 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+
+
+# 11th Gen Intel Core i7-1165G7 + SSD Samsung 990 Pro + 24Go RAM
+
+# Test sample: wordle.txt
+
+# SLOW : (Max RAM ~350Mo, Avg RAM ~100Mo)
+# show_stats -- END -- Played 2315 games in 11926.9 second(s) (5.15 second(s) / game)
+# show_stats -- END -- Average tries is 3.74
+# show_stats -- END -- Median tries is 4.0
+# show_stats -- END -- (Min, Max) tries are (1, 7)
+# show_stats -- END -- 1 Lucky guess (1st try)
+# show_stats -- END -- 1 Game Over (More than 6 tries)
+# show_stats -- END -- Average crutch suggestion use is 0.11
+# show_stats -- END -- Median crutch suggestion use is 0.0
+# show_stats -- END -- Crutch suggestion used in 260 game(s)
+
+# FAST : (Max RAM ~350Mo, Avg RAM ~100Mo)
+# show_stats -- END -- Played 2315 games in 7121.98 second(s) (3.08 second(s) / game)
+# show_stats -- END -- Average tries is 3.74
+# show_stats -- END -- Median tries is 4.0
+# show_stats -- END -- (Min, Max) tries are (1, 7)
+# show_stats -- END -- 1 Lucky guess (1st try)
+# show_stats -- END -- 1 Game Over (More than 6 tries)
+# show_stats -- END -- Average crutch suggestion use is 0.11
+# show_stats -- END -- Median crutch suggestion use is 0.0
+# show_stats -- END -- Crutch suggestion used in 259 game(s)
