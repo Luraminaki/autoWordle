@@ -195,7 +195,7 @@ def main() -> None:
     max_games = len(language_launcher.words) # 0 and 1 are forbidden !
 
     if max_games <= 1:
-        print(f"{curr_func} -- ABORTING -- Not enough max_games is {max_games} (Must be greater than 1)")
+        print(f"{curr_func} -- ABORTING -- Not enough max_games: {max_games} (Must be greater than 1)")
         return None
 
     nb_guesses: list[int] = []
@@ -231,16 +231,17 @@ if __name__ == "__main__":
     main()
 
 
-# 11th Gen Intel Core i7-1165G7 + SSD Samsung 990 Pro + 24Go RAM
-
-# Test sample: wordle.txt
-
-
 # To run with PyPy
 # - Download PyPy https://www.pypy.org/
 # - Run `pypy -m ensurepip`
 # - Run `pypy -m pip install unidecode`
 # - Run `pypy testouille_wordle.py `
+
+################################################################################################
+
+# 11th Gen Intel Core i7-1165G7 + SSD Samsung 990 Pro + 24Go RAM
+
+################################################################################################
 
 # PyPy 3.10 : (Max RAM ~6Go)
 # __init__ -- Acquiring file data/wordle.txt...
@@ -253,7 +254,6 @@ if __name__ == "__main__":
 # load_build_cache_compendium -- Added 4230557 entries in cache compendium in 10.38 second(s)...
 # __init__ -- Language launcher for wordle.txt initialised in 352.74 second(s)
 
-
 # Python 3.12.1 : (Max RAM ~4Go)
 # __init__ -- Acquiring file data/wordle.txt...
 # __init__ -- Building word list...
@@ -265,8 +265,9 @@ if __name__ == "__main__":
 # load_build_cache_compendium -- Added 4230557 entries in cache compendium in 32.32 second(s)...
 # __init__ -- Language launcher for wordle.txt initialised in 379.0 second(s)
 
+################################################################################################
 
-# SLOW : (Max RAM ~350Mo, Avg RAM ~100Mo)
+# Python 3.12.1 -- TEST "SLOW" : (Max RAM ~350Mo, Avg RAM ~100Mo)
 # show_stats -- END -- Played 2315 games in 11926.9 second(s) (5.15 second(s) / game)
 # show_stats -- END -- Average tries is 3.74
 # show_stats -- END -- Median tries is 4.0
@@ -277,7 +278,7 @@ if __name__ == "__main__":
 # show_stats -- END -- Median crutch suggestion use is 0.0
 # show_stats -- END -- Crutch suggestion used in 260 game(s)
 
-# FAST : (Max RAM ~350Mo, Avg RAM ~100Mo)
+# Python 3.12.1 -- TEST "FAST" : (Max RAM ~350Mo, Avg RAM ~100Mo)
 # show_stats -- END -- Played 2315 games in 7121.98 second(s) (3.08 second(s) / game)
 # show_stats -- END -- Average tries is 3.74
 # show_stats -- END -- Median tries is 4.0
