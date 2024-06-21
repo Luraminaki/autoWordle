@@ -167,7 +167,7 @@ def show_stats(nb_suggestion_used: list[int], nb_guesses: list[int],
     median_suggestion_used = nb_suggestion_used[cptr_games // 2] if cptr_games % 2 == 0 else (nb_suggestion_used[cptr_games // 2] + nb_suggestion_used[(cptr_games // 2) + 1]) / 2
     game_where_sugg_used = max_games - nb_suggestion_used.count(0)
 
-    print(f"{curr_func} -- END -- Played {cptr_games} games in {round(tac, 2)} second(s) ({round(cptr_games/round(tac, 2), 2)} second(s) / game)")
+    print(f"{curr_func} -- END -- Played {cptr_games} games in {round(tac, 2)} second(s) ({round(round(tac, 2)/cptr_games, 2)} second(s) / game)")
     print(f"{curr_func} -- END -- Average tries is {round(sum(nb_guesses) / cptr_games, 2)}")
     print(f"{curr_func} -- END -- Median tries is {median_guesses}")
     print(f"{curr_func} -- END -- (Min, Max) tries are ({min(nb_guesses)}, {max(nb_guesses)})")
