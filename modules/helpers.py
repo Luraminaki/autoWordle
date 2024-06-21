@@ -106,6 +106,8 @@ class LangLauncher():
         print(f"{curr_func} -- Building pattern compendium...")
         pattern_compendium: dict | dict[str, set[tuple[tuple[int], tuple[int]]]] = {}
 
+        tic = time.perf_counter()
+
         if path.exists():
             pattern_compendium = pickle.load(path.open('rb'))
 
@@ -113,7 +115,9 @@ class LangLauncher():
             pattern_compendium = computing.build_pattern_compendium(self.words)
             pickle.dump(pattern_compendium, path.open('wb'))
 
-        print(f"{curr_func} -- Found {len(pattern_compendium)} patterns...")
+        tac = time.perf_counter() - tic
+
+        print(f"{curr_func} -- Found {len(pattern_compendium)} patterns in {round(tac, 2)} second(s)...")
 
         return pattern_compendium
 
