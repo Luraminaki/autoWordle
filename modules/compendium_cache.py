@@ -41,7 +41,7 @@ def try_process_to_str_or_null_str(val: None | str | Any) -> str:
 
 
 class CacheDB:
-    def __init__(self, db_file_path: str | pathlib.Path, table_names: set[str] | set[int] | set[tuple[int]]=None, **kwargs: str) -> None:
+    def __init__(self, db_file_path: str | pathlib.Path, table_names: set[str] | set[int] | set[tuple[int, ...]]=None, **kwargs: str) -> None:
         curr_func = inspect.currentframe().f_code.co_name
 
         self.db_path = str(db_file_path)
@@ -95,7 +95,7 @@ class CacheDB:
         return col.lower() in self.columns or col=='*'
 
 
-    def _check_table(self, table_name: str | int | tuple[int]) -> bool:
+    def _check_table(self, table_name: str | int | tuple[int, ...]) -> bool:
         curr_func = inspect.currentframe().f_code.co_name
 
         if isinstance(table_name, tuple):
@@ -123,7 +123,7 @@ class CacheDB:
         return False
 
 
-    def _check_table_exists(self, table_name: str | int | tuple[int]) -> bool:
+    def _check_table_exists(self, table_name: str | int | tuple[int, ...]) -> bool:
         curr_func = inspect.currentframe().f_code.co_name
 
         if isinstance(table_name, tuple):
@@ -147,7 +147,7 @@ class CacheDB:
             return False
 
 
-    def _create_table(self, table_name: str | int | tuple[int]) -> None:
+    def _create_table(self, table_name: str | int | tuple[int, ...]) -> None:
         curr_func = inspect.currentframe().f_code.co_name
 
         data_types = tuple('{} {}'.format(key, val if val.split(' ', maxsplit=1)[0] in ('INTEGER', 'REAL', 'TEXT', 'BLOB') else 'TEXT') for (key, val) in self.columns.items())
@@ -180,7 +180,7 @@ class CacheDB:
         return result
 
 
-    def add_entries(self, table_name: str | int | tuple[int], **kwargs: list[str]) -> bool:
+    def add_entries(self, table_name: str | int | tuple[int, ...], **kwargs: list[str]) -> bool:
         curr_func = inspect.currentframe().f_code.co_name
 
         if isinstance(table_name, tuple):
@@ -230,7 +230,7 @@ class CacheDB:
         return self._toggle_optimisation(False)
 
 
-    def get_entries(self, table_name: str | int | tuple[int], columns: set[str] | tuple[str]=(), constraints: str="", **kwargs) -> list[dict[str, int | float | str]]:
+    def get_entries(self, table_name: str | int | tuple[int, ...], columns: set[str] | tuple[str, ...]=(), constraints: str="", **kwargs) -> list[dict[str, int | float | str]]:
         curr_func = inspect.currentframe().f_code.co_name
 
         if isinstance(table_name, tuple):

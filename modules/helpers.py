@@ -59,11 +59,11 @@ class LangLauncher():
         return self.__class__.__name__
 
 
-    def get_couples_from_compendium(self, pattern: str) -> set | set[tuple[tuple[int]]]:
+    def get_couples_from_compendium(self, pattern: str) -> set | set[tuple[tuple[int, ...]]]:
         if self.cache is None:
             return set()
 
-        couples: set[tuple[tuple[int]]] = set()
+        couples: set[tuple[tuple[int, ...]]] = set()
 
         for result in self.cache.get_entries(pattern):
             couples.add(tuple(tuple(ord(letter) for letter in value) for key, value in result.items() if key != "__pkid"))
@@ -71,7 +71,7 @@ class LangLauncher():
         return couples
 
 
-    def load_build_cache_compendium(self, path: pathlib.Path, pattern_compendium: dict[str, set[tuple[tuple[int], tuple[int]]]]=None) -> None | compendium_cache.CacheDB:
+    def load_build_cache_compendium(self, path: pathlib.Path, pattern_compendium: dict[str, set[tuple[tuple[int, ...], tuple[int, ...]]]]=None) -> None | compendium_cache.CacheDB:
         curr_func = inspect.currentframe().f_code.co_name
 
         if path.exists():
@@ -100,11 +100,11 @@ class LangLauncher():
         return cache
 
 
-    def build_pattern_compendium(self, path: pathlib.Path) -> dict | dict[str, set[tuple[tuple[int], tuple[int]]]]:
+    def build_pattern_compendium(self, path: pathlib.Path) -> dict | dict[str, set[tuple[tuple[int, ...], tuple[int, ...]]]]:
         curr_func = inspect.currentframe().f_code.co_name
 
         print(f"{curr_func} -- Building pattern compendium...")
-        pattern_compendium: dict | dict[str, set[tuple[tuple[int], tuple[int]]]] = {}
+        pattern_compendium: dict | dict[str, set[tuple[tuple[int, ...], tuple[int, ...]]]] = {}
 
         tic = time.perf_counter()
 
@@ -122,11 +122,11 @@ class LangLauncher():
         return pattern_compendium
 
 
-    def compute_words_information(self, compute_best_opening: bool) -> list | list[tuple[tuple[int], float]]:
+    def compute_words_information(self, compute_best_opening: bool) -> list | list[tuple[tuple[int, ...], float]]:
         curr_func = inspect.currentframe().f_code.co_name
 
-        pattern_compendium: dict[str, set[tuple[tuple[int], tuple[int]]]] | None = None
-        words_information: list | list[tuple[tuple[int], float]] = []
+        pattern_compendium: dict[str, set[tuple[tuple[int, ...], tuple[int, ...]]]] | None = None
+        words_information: list | list[tuple[tuple[int, ...], float]] = []
 
         compendium_file, cache_file, words_information_file = get_data_paths(self.words_file, self.word_lenght)
 
@@ -177,7 +177,7 @@ def init_lang_app_data(lang_files: list[pathlib.Path],
     return app_sources
 
 
-def get_words_list(path: pathlib.Path, word_lenght: int=5) -> set | set[tuple[int]]:
+def get_words_list(path: pathlib.Path, word_lenght: int=5) -> set | set[tuple[int, ...]]:
     curr_func = inspect.currentframe().f_code.co_name
 
     words = set()
@@ -211,7 +211,7 @@ def get_data_paths(words_file: pathlib.Path, word_lenght: int) -> tuple[pathlib.
     return compendium_file, cache_file, words_information_file
 
 
-def save_words_information(path: pathlib.Path, words_information: list[tuple[tuple[int], float]]) -> None:
+def save_words_information(path: pathlib.Path, words_information: list[tuple[tuple[int, ...], float]]) -> None:
     path.unlink(missing_ok=True)
 
     with path.open('a', encoding='utf-8') as fp:
@@ -221,8 +221,8 @@ def save_words_information(path: pathlib.Path, words_information: list[tuple[tup
             fp.write(line)
 
 
-def load_words_information(path: pathlib.Path) -> list | list[tuple[tuple[int], float]]:
-    words_information: list | list[tuple[tuple[int], float]] = []
+def load_words_information(path: pathlib.Path) -> list | list[tuple[tuple[int, ...], float]]:
+    words_information: list | list[tuple[tuple[int, ...], float]] = []
 
     with path.open('r', encoding='utf-8') as fp:
         for line in fp.readlines():

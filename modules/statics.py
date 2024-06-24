@@ -40,7 +40,7 @@ class StatusFunction(enum.Enum):
     WARNING = enum.auto()
 
 
-def pattern_to_emoji(pattern: tuple[int]) -> str:
+def pattern_to_emoji(pattern: tuple[int, ...]) -> str:
     d = {StatusLetter.MISS.value: "⬛",
          StatusLetter.MISPLACED.value: "🟨",
          StatusLetter.EXACT.value: "🟩"}
@@ -54,5 +54,5 @@ def emoji_to_pattern(pattern: str) -> str:
     return "".join(str(d[x]) for x in pattern)
 
 
-def pattern_permutations(word_lenght: int=5) -> set | set[tuple[int]]:
+def pattern_permutations(word_lenght: int=5) -> set | set[tuple[int, ...]]:
     return set(it.product([StatusLetter.MISS, StatusLetter.MISPLACED, StatusLetter.EXACT], repeat=word_lenght))

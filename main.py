@@ -117,7 +117,7 @@ async def get_word_to_guess(session_uuid: str) -> dict[str, str]:
 
 
 @app.post("/get_guess_stats")
-async def get_guess_stats(session_uuid: str, word: str, pattern: str) -> dict[str, str | dict | dict[str, list[tuple[tuple[int], float]] | set[int] | dict[str, int] | list[list[tuple[tuple[int], float]]] | float]]:
+async def get_guess_stats(session_uuid: str, word: str, pattern: str) -> dict[str, str | dict | dict[str, list[tuple[tuple[int, ...], float]] | set[int] | dict[str, int] | list[list[tuple[tuple[int, ...], float]]] | float]]:
     try:
         stats = models.get_guess_stats(APP_SESSIONS[session_uuid], word, statics.emoji_to_pattern(pattern))
 

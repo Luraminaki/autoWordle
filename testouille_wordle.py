@@ -21,8 +21,8 @@ from modules import statics, helpers, computing, wordle
 __version__ = '0.1.0'
 
 
-def init_game(language_launcher: helpers.LangLauncher, word: tuple[int],
-              best_opening: bool, cptr_games: int) -> tuple[str, tuple[int], wordle.Wordle]:
+def init_game(language_launcher: helpers.LangLauncher, word: tuple[int, ...],
+              best_opening: bool, cptr_games: int) -> tuple[str, tuple[int, ...], wordle.Wordle]:
     curr_func = inspect.currentframe().f_code.co_name
 
     game = wordle.Wordle(language_launcher)
@@ -40,7 +40,7 @@ def init_game(language_launcher: helpers.LangLauncher, word: tuple[int],
     return guess, pattern, game
 
 
-def crutch_suggestion(game: wordle.Wordle, pool: list[tuple[tuple[int], float]],
+def crutch_suggestion(game: wordle.Wordle, pool: list[tuple[tuple[int, ...], float]],
                       letter_extractor: dict[str, dict[str, int]]) -> tuple[list[str], int]:
     curr_func = inspect.currentframe().f_code.co_name
 
@@ -64,8 +64,8 @@ def crutch_suggestion(game: wordle.Wordle, pool: list[tuple[tuple[int], float]],
     return sugg_guesses, sugg_rank
 
 
-def crutch_guess(game: wordle.Wordle, pool: list[tuple[tuple[int], float]],
-                 pattern: tuple[int],
+def crutch_guess(game: wordle.Wordle, pool: list[tuple[tuple[int, ...], float]],
+                 pattern: tuple[int, ...],
                  sugg_guesses: list[str], sugg_rank: int) -> tuple[str, bool]:
     curr_func = inspect.currentframe().f_code.co_name
 
@@ -90,8 +90,8 @@ def crutch_guess(game: wordle.Wordle, pool: list[tuple[tuple[int], float]],
     return guess, suggestion_used
 
 
-def fast_test(game: wordle.Wordle, pool: list[tuple[tuple[int], float]],
-              pattern: tuple[int], guess: str,
+def fast_test(game: wordle.Wordle, pool: list[tuple[tuple[int, ...], float]],
+              pattern: tuple[int, ...], guess: str,
               letter_extractor: dict[str, dict[str, int]]) -> tuple[str, bool]:
     # Far from being the best solver, but somewhat OK speed wise...
 
@@ -103,8 +103,8 @@ def fast_test(game: wordle.Wordle, pool: list[tuple[tuple[int], float]],
     return crutch_guess(game, pool, pattern, sugg_guesses, sugg_rank)
 
 
-def slow_test(game: wordle.Wordle, pool: list[tuple[tuple[int], float]],
-              pattern: tuple[int], guess: str,
+def slow_test(game: wordle.Wordle, pool: list[tuple[tuple[int, ...], float]],
+              pattern: tuple[int, ...], guess: str,
               letter_extractor: dict[str, dict[str, int]]) -> tuple[str, bool]:
     # As the name implies, it's a lot slower and cumputing intensive... Especially if ran in a single thread...
 
@@ -115,9 +115,9 @@ def slow_test(game: wordle.Wordle, pool: list[tuple[tuple[int], float]],
     return fast_test(game, updated_pool, pattern, guess, letter_extractor)
 
 
-def run_test(language_launcher: helpers.LangLauncher, word: tuple[int],
+def run_test(language_launcher: helpers.LangLauncher, word: tuple[int, ...],
              best_opening: bool, max_tries: int,
-             cptr_games: int, func_test: callable) -> tuple[int]:
+             cptr_games: int, func_test: callable) -> tuple[int, ...]:
     curr_func = inspect.currentframe().f_code.co_name
 
     guess, pattern, game = init_game(language_launcher, word, best_opening, cptr_games)

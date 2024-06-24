@@ -11,7 +11,6 @@ Created on Wed May 15 15:10:51 2024
 import inspect
 
 import math
-import time
 
 from collections import Counter
 from copy import deepcopy
@@ -25,7 +24,7 @@ from modules import statics
 __version__ = '0.1.0'
 
 
-def compute_pattern(guess: tuple[int], word: tuple[int]) -> tuple | tuple[int]:
+def compute_pattern(guess: tuple[int, ...], word: tuple[int, ...]) -> tuple | tuple[int, ...]:
     pattern = [statics.StatusLetter.MISS.value] * len(word)
     temp_guess = list(guess)
 
@@ -45,7 +44,7 @@ def compute_pattern(guess: tuple[int], word: tuple[int]) -> tuple | tuple[int]:
     return tuple(pattern)
 
 
-def build_letter_extractor(guess: tuple[int], pattern: tuple[int]) -> dict[str, dict] | dict[str, dict[str, int]]:
+def build_letter_extractor(guess: tuple[int, ...], pattern: tuple[int, ...]) -> dict[str, dict] | dict[str, dict[str, int]]:
     extractor: dict[str, dict] | dict[str, dict[str, int]] = {"incl": {}, "excl": {}}
 
     for pos, letter in enumerate(guess):
@@ -77,7 +76,7 @@ def update_letter_extractor(old_ext: dict[str, dict[str, int]], new_ext: dict[st
     return old_ext
 
 
-def gather_pool_letters(pool_words: list[tuple[tuple[int], float]]) -> tuple[set, dict] | tuple[set[int], dict[str, int]]:
+def gather_pool_letters(pool_words: list[tuple[tuple[int, ...], float]]) -> tuple[set, dict] | tuple[set[int], dict[str, int]]:
     pool_letters = set()
     dupes: dict[str, int] = {}
 
@@ -94,10 +93,10 @@ def gather_pool_letters(pool_words: list[tuple[tuple[int], float]]) -> tuple[set
     return pool_letters, dupes
 
 
-def build_suggestion(pool_words_information: list[tuple[tuple[int], float]],
+def build_suggestion(pool_words_information: list[tuple[tuple[int, ...], float]],
                      pool_letters: set[int],
                      pool_letters_dupes: dict[str, int],
-                     letter_extractor: dict[str, dict[str, int]]) -> list[list] | list[list[tuple[tuple[int], float]]]:
+                     letter_extractor: dict[str, dict[str, int]]) -> list[list] | list[list[tuple[tuple[int, ...], float]]]:
     known_letters = set()
 
     for letter in letter_extractor["incl"]:
@@ -115,7 +114,7 @@ def build_suggestion(pool_words_information: list[tuple[tuple[int], float]],
         known_letters.add(ord(letter))
 
     unknown_letters = pool_letters.difference(known_letters)
-    suggestions: list[list[tuple[tuple[int], float]]] = [None]*(len(pool_words_information[0][0])+1)
+    suggestions: list[list[tuple[tuple[int, ...], float]]] = [None]*(len(pool_words_information[0][0])+1)
 
     for word_information in pool_words_information:
         nb_letters_in_common = len(set(word_information[0]).intersection(unknown_letters))
@@ -135,12 +134,12 @@ def safe_log2(x: int | float) -> int | float:
     return math.log2(x) if x > 0 else 0
 
 
-def prepare_worker_datas(pool_words: set[tuple[int]], threads: int=0) -> tuple[list[list[tuple[int]]], managers.DictProxy, list[Process]]:
+def prepare_worker_datas(pool_words: set[tuple[int, ...]], threads: int=0) -> tuple[list[list[tuple[int, ...]]], managers.DictProxy, list[Process]]:
     if not 0 < threads <= cpu_count():
         threads = cpu_count()
 
     chunk_size = math.ceil(len(pool_words)/threads)
-    pool_words: list[tuple[int]] = list(pool_words)
+    pool_words: list[tuple[int, ...]] = list(pool_words)
     pool_words_chunked = [pool_words[i:i + chunk_size] for i in range(0, len(pool_words), chunk_size)]
 
     manager = Manager()
@@ -155,10 +154,10 @@ def prepare_worker_datas(pool_words: set[tuple[int]], threads: int=0) -> tuple[l
 #####################################
 
 
-def build_pattern_compendium(pool_words: set[tuple[int]]) -> dict | dict[str, set[tuple[tuple[int], tuple[int]]]]:
-    pool_words_pile: set[tuple[int]] = deepcopy(pool_words)
+def build_pattern_compendium(pool_words: set[tuple[int, ...]]) -> dict | dict[str, set[tuple[tuple[int, ...], tuple[int, ...]]]]:
+    pool_words_pile: set[tuple[int, ...]] = deepcopy(pool_words)
 
-    pattern_compendium: dict[str, set[tuple[tuple[int], tuple[int]]]] = {}
+    pattern_compendium: dict[str, set[tuple[tuple[int, ...], tuple[int, ...]]]] = {}
 
     while pool_words_pile:
         word_piled = pool_words_pile.pop()
@@ -179,7 +178,7 @@ def build_pattern_compendium(pool_words: set[tuple[int]]) -> dict | dict[str, se
     return pattern_compendium
 
 
-def compute_word_counter_by_pattern(pattern_compendium: dict[str, set[tuple[tuple[int], tuple[int]]]]) -> dict[str, dict[str, int]]:
+def compute_word_counter_by_pattern(pattern_compendium: dict[str, set[tuple[tuple[int, ...], tuple[int, ...]]]]) -> dict[str, dict[str, int]]:
     word_counter_by_pattern: dict[str, dict[str, int]] = {}
 
     for pattern, compendium in pattern_compendium.items():
@@ -189,7 +188,7 @@ def compute_word_counter_by_pattern(pattern_compendium: dict[str, set[tuple[tupl
     return word_counter_by_pattern
 
 
-def compute_word_entropy_faster(word: tuple[int], word_counter_by_pattern: dict[str, dict[str, int]], nbr_words: int) -> float:
+def compute_word_entropy_faster(word: tuple[int, ...], word_counter_by_pattern: dict[str, dict[str, int]], nbr_words: int) -> float:
     entropy = 0.0
 
     for _, compendium in word_counter_by_pattern.items():
@@ -199,17 +198,17 @@ def compute_word_entropy_faster(word: tuple[int], word_counter_by_pattern: dict[
     return entropy
 
 
-def compute_word_entropy_faster_worker(pool_words_chunk: set[tuple[int]], word_counter_by_pattern: dict[str, dict[str, int]], nbr_words: int,
+def compute_word_entropy_faster_worker(pool_words_chunk: set[tuple[int, ...]], word_counter_by_pattern: dict[str, dict[str, int]], nbr_words: int,
                                        return_dict_entropy: managers.DictProxy) -> None:
     for word in pool_words_chunk:
         return_dict_entropy[word] = compute_word_entropy_faster(word, word_counter_by_pattern, nbr_words)
 
 
-def compute_words_information_faster(pool_words: set[tuple[int]],
-                                     pattern_compendium: dict[str, set[tuple[tuple[int], tuple[int]]]], threads: int=0) -> list | list[tuple[tuple[int], float]]:
+def compute_words_information_faster(pool_words: set[tuple[int, ...]],
+                                     pattern_compendium: dict[str, set[tuple[tuple[int, ...], tuple[int, ...]]]], threads: int=0) -> list | list[tuple[tuple[int, ...], float]]:
     curr_func = inspect.currentframe().f_code.co_name
 
-    words_information: list | list[tuple[tuple[int], float]] = []
+    words_information: list | list[tuple[tuple[int, ...], float]] = []
     pool_words_chunked, return_dict_entropy, jobs = prepare_worker_datas(pool_words, threads)
     word_counter_by_pattern = compute_word_counter_by_pattern(pattern_compendium)
 

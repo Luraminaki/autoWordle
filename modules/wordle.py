@@ -56,7 +56,7 @@ class Wordle ():
         self.letter_extractor = {"incl": {}, "excl": {}}
 
 
-    def submit_guess_and_pattern(self, guess: str, pattern: str) -> None | list | list[tuple[tuple[int], float]]:
+    def submit_guess_and_pattern(self, guess: str, pattern: str) -> None | list | list[tuple[tuple[int, ...], float]]:
         curr_func = inspect.currentframe().f_code.co_name
 
         if self._is_invalid_word(guess):
@@ -76,7 +76,7 @@ class Wordle ():
             return None
 
         # print(f"{curr_func} -- Finding possible matches...")
-        pool_words: set[tuple[int]] = set()
+        pool_words: set[tuple[int, ...]] = set()
         for pair_words in self.language_launcher.get_couples_from_compendium(pattern):
             try:
                 conj = int(not bool(pair_words.index(t_guess)))
@@ -104,7 +104,7 @@ class Wordle ():
         return pool_words_information
 
 
-    def submit_guess(self, guess: str) -> None | tuple | tuple[int]:
+    def submit_guess(self, guess: str) -> None | tuple | tuple[int, ...]:
         curr_func = inspect.currentframe().f_code.co_name
 
         if self._is_invalid_word(guess):
