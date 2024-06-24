@@ -50,7 +50,7 @@ def build_letter_extractor(guess: tuple[int], pattern: tuple[int]) -> dict[str, 
         letter_chr = chr(letter)
 
         if pattern[pos] != statics.StatusLetter.MISS.value:
-            if extractor["incl"].get(letter_chr, None) is None:
+            if letter_chr not in extractor["incl"]:
                 extractor["incl"][letter_chr] = 1
                 continue
 
@@ -64,7 +64,7 @@ def build_letter_extractor(guess: tuple[int], pattern: tuple[int]) -> dict[str, 
 
 def update_letter_extractor(old_ext: dict[str, dict[str, int]], new_ext: dict[str, dict[str, int]]) -> dict[str, dict] | dict[str, dict[str, int]]:
     for letter in new_ext["incl"]:
-        if old_ext["incl"].get(letter, None) is None:
+        if letter not in old_ext["incl"]:
             old_ext["incl"][letter] = new_ext["incl"][letter]
             continue
 
@@ -168,8 +168,9 @@ def build_pattern_compendium(pool_words: set[tuple[int]]) -> dict | dict[str, se
 
             pattern = ''.join(str(p) for p in compute_pattern(guess=word_piled, word=word))
 
-            if pattern_compendium.get(pattern, None) is None:
+            if pattern not in pattern_compendium:
                 pattern_compendium[pattern] = {tuple(sorted([word_piled, word]))}
+                continue
 
             pattern_compendium[pattern].add(tuple(sorted([word_piled, word])))
 
