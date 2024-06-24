@@ -11,7 +11,9 @@ Created on Wed May 15 15:10:51 2024
 import inspect
 
 import math
+import time
 
+from collections import Counter
 from copy import deepcopy
 from multiprocessing import Process, managers, Manager, cpu_count
 
@@ -177,20 +179,30 @@ def build_pattern_compendium(pool_words: set[tuple[int]]) -> dict | dict[str, se
     return pattern_compendium
 
 
-def compute_word_entropy_faster(word: tuple[int], pattern_compendium: dict[str, set[tuple[tuple[int], tuple[int]]]], nbr_words: int) -> float:
+def compute_word_counter_by_pattern(pattern_compendium: dict[str, set[tuple[tuple[int], tuple[int]]]]) -> dict[str, dict[str, int]]:
+    word_counter_by_pattern: dict[str, dict[str, int]] = {}
+
+    for pattern, compendium in pattern_compendium.items():
+        pattern_words = ["".join(chr(letter) for letter in word) for word_matched in compendium for word in word_matched]
+        word_counter_by_pattern[pattern] = dict(Counter(pattern_words))
+
+    return word_counter_by_pattern
+
+
+def compute_word_entropy_faster(word: tuple[int], word_counter_by_pattern: dict[str, dict[str, int]], nbr_words: int) -> float:
     entropy = 0.0
 
-    for _, compendium in pattern_compendium.items():
-        match_probability = len([word_matched for word_matched in compendium if word in word_matched]) / nbr_words
+    for _, compendium in word_counter_by_pattern.items():
+        match_probability = compendium.get("".join(chr(letter) for letter in word), 0) / nbr_words
         entropy += (match_probability * -safe_log2(match_probability))
 
     return entropy
 
 
-def compute_word_entropy_faster_worker(pool_words_chunk: set[tuple[int]], pattern_compendium: dict[str, set[tuple[tuple[int], tuple[int]]]], nbr_words: int,
+def compute_word_entropy_faster_worker(pool_words_chunk: set[tuple[int]], word_counter_by_pattern: dict[str, dict[str, int]], nbr_words: int,
                                        return_dict_entropy: managers.DictProxy) -> None:
     for word in pool_words_chunk:
-        return_dict_entropy[word] = compute_word_entropy_faster(word, pattern_compendium, nbr_words)
+        return_dict_entropy[word] = compute_word_entropy_faster(word, word_counter_by_pattern, nbr_words)
 
 
 def compute_words_information_faster(pool_words: set[tuple[int]],
@@ -199,10 +211,11 @@ def compute_words_information_faster(pool_words: set[tuple[int]],
 
     words_information: list | list[tuple[tuple[int], float]] = []
     pool_words_chunked, return_dict_entropy, jobs = prepare_worker_datas(pool_words, threads)
+    word_counter_by_pattern = compute_word_counter_by_pattern(pattern_compendium)
 
     for pool_words_chunk in pool_words_chunked:
         jobs.append(Process(target=compute_word_entropy_faster_worker,
-                            args=(set(pool_words_chunk), pattern_compendium, len(pool_words), return_dict_entropy)))
+                            args=(set(pool_words_chunk), word_counter_by_pattern, len(pool_words), return_dict_entropy)))
         jobs[-1].start()
 
     for process in jobs:
