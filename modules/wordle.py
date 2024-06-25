@@ -37,15 +37,15 @@ class Wordle ():
         print(f"{curr_func} -- Remaining information is: {round(self.information, 2)} bit(s)")
 
 
-    def _is_invalid_word(self, word: str) -> bool:
-        return word == '' or len(word) != self.language_launcher.word_lenght or tuple(ord(letter) for letter in word) not in self.language_launcher.words
+    def _is_invalid_word(self, word: tuple[int, ...]) -> bool:
+        return len(word) != self.language_launcher.word_lenght or word not in self.language_launcher.words
 
 
-    def _is_invalid_pattern(self, pattern: str) -> bool:
-        allowed = [str(entry.value) for entry in statics.StatusLetter]
+    def _is_invalid_pattern(self, pattern: tuple[int, ...]) -> bool:
+        allowed = [entry.value for entry in statics.StatusLetter]
         foreign_found = not all(eval in allowed for eval in set(pattern))
 
-        return not pattern.isnumeric() or len(pattern) != self.language_launcher.word_lenght or foreign_found
+        return len(pattern) != self.language_launcher.word_lenght or foreign_found
 
 
     def reset(self) -> None:
@@ -56,7 +56,7 @@ class Wordle ():
         self.letter_extractor = {"incl": {}, "excl": {}}
 
 
-    def submit_guess_and_pattern(self, guess: str, pattern: str) -> None | list | list[tuple[tuple[int, ...], float]]:
+    def submit_guess_and_pattern(self, guess: tuple[int, ...], pattern: tuple[int, ...]) -> None | list | list[tuple[tuple[int, ...], float]]:
         curr_func = inspect.currentframe().f_code.co_name
 
         if self._is_invalid_word(guess):
@@ -66,8 +66,6 @@ class Wordle ():
         if self._is_invalid_pattern(pattern):
             print(f"{curr_func} -- Pattern {pattern} is not allowed")
             return None
-
-        t_guess = tuple(ord(letter) for letter in guess)
 
         tic = time.perf_counter()
 
@@ -79,7 +77,7 @@ class Wordle ():
         pool_words: set[tuple[int, ...]] = set()
         for pair_words in self.language_launcher.get_couples_from_compendium(pattern):
             try:
-                conj = int(not bool(pair_words.index(t_guess)))
+                conj = int(not bool(pair_words.index(guess)))
                 pool_words.add(pair_words[conj])
             except:
                 pass
@@ -104,15 +102,14 @@ class Wordle ():
         return pool_words_information
 
 
-    def submit_guess(self, guess: str) -> None | tuple | tuple[int, ...]:
+    def submit_guess(self, guess: tuple[int, ...]) -> None | tuple | tuple[int, ...]:
         curr_func = inspect.currentframe().f_code.co_name
 
         if self._is_invalid_word(guess):
-            print(f"{curr_func} -- Word {guess} is not allowed")
+            print(f"{curr_func} -- Word {''.join(chr(ord_letter) for ord_letter in guess)} is not allowed")
             return None
 
-        pattern = computing.compute_pattern(guess=tuple(ord(letter) for letter in guess), word=self.word)
-        print(f"{curr_func} -- {guess}")
+        pattern = computing.compute_pattern(guess=guess, word=self.word)
         print(f"{curr_func} -- {statics.pattern_to_emoji(pattern)}")
 
         return pattern

@@ -22,7 +22,7 @@ __version__ = '0.1.0'
 
 
 def init_game(language_launcher: helpers.LangLauncher, word: tuple[int, ...],
-              best_opening: bool, cptr_games: int) -> tuple[str, tuple[int, ...], wordle.Wordle]:
+              best_opening: bool, cptr_games: int) -> tuple[tuple[int, ...], tuple[int, ...], wordle.Wordle]:
     curr_func = inspect.currentframe().f_code.co_name
 
     game = wordle.Wordle(language_launcher)
@@ -31,9 +31,9 @@ def init_game(language_launcher: helpers.LangLauncher, word: tuple[int, ...],
     print(f"{curr_func} -- Starting game n°{cptr_games + 1}")
     print(f"{curr_func} -- Word to guess is: {''.join(chr(ord_letter) for ord_letter in game.word)}")
 
-    guess = "".join(chr(ord_letter) for ord_letter in random.choice(list(game.language_launcher.words)))
+    guess = random.choice(list(game.language_launcher.words))
     if best_opening:
-        guess = "".join(chr(ord_letter) for ord_letter in game.language_launcher.words_information[0][0])
+        guess = game.language_launcher.words_information[0][0]
 
     pattern = tuple([statics.StatusLetter.MISS.value]*len(word))
 
@@ -66,46 +66,45 @@ def crutch_suggestion(game: wordle.Wordle, pool: list[tuple[tuple[int, ...], flo
 
 def crutch_guess(game: wordle.Wordle, pool: list[tuple[tuple[int, ...], float]],
                  pattern: tuple[int, ...],
-                 sugg_guesses: list[str], sugg_rank: int) -> tuple[str, bool]:
+                 sugg_guesses: list[str], sugg_rank: int) -> tuple[tuple[int, ...], bool]:
     curr_func = inspect.currentframe().f_code.co_name
 
     suggestion_used = False
     thresh_sugg = (game.language_launcher.word_lenght % 2) + game.language_launcher.word_lenght // 2
 
     if len(pool) <= 2:
-        guess = "".join(chr(ord_letter) for ord_letter in pool[0][0])
+        guess = pool[0][0]
 
     elif len(pool) > 2 and \
     sugg_rank > game.language_launcher.word_lenght - thresh_sugg and \
     pattern.count(statics.StatusLetter.EXACT.value) >= thresh_sugg:
         guess = sugg_guesses[0]
 
-        print(f"{curr_func} -- ⚠️  Using suggestion '{guess}' on next attemp ⚠️")
+        print(f"{curr_func} -- ⚠️  Using suggestion '{''.join(chr(ord_letter) for ord_letter in guess)}' on next attemp ⚠️")
 
         suggestion_used = True
 
     else:
-        guess = "".join(chr(ord_letter) for ord_letter in pool[0][0])
+        guess = pool[0][0]
 
     return guess, suggestion_used
 
 
 def fast_test(game: wordle.Wordle, pool: list[tuple[tuple[int, ...], float]],
               pattern: tuple[int, ...], guess: str,
-              letter_extractor: dict[str, dict[str, int]]) -> tuple[str, bool]:
+              letter_extractor: dict[str, dict[str, int]]) -> tuple[tuple[int, ...], bool]:
     # Far from being the best solver, but somewhat OK speed wise...
 
     letter_extractor = computing.update_letter_extractor(letter_extractor,
-                                                         computing.build_letter_extractor(tuple(ord(letter) for letter in guess),
-                                                                                          pattern))
+                                                         computing.build_letter_extractor(guess, pattern))
     sugg_guesses, sugg_rank = crutch_suggestion(game, pool, letter_extractor)
 
     return crutch_guess(game, pool, pattern, sugg_guesses, sugg_rank)
 
 
 def slow_test(game: wordle.Wordle, pool: list[tuple[tuple[int, ...], float]],
-              pattern: tuple[int, ...], guess: str,
-              letter_extractor: dict[str, dict[str, int]]) -> tuple[str, bool]:
+              pattern: tuple[int, ...], guess: tuple[int, ...],
+              letter_extractor: dict[str, dict[str, int]]) -> tuple[tuple[int, ...], bool]:
     # As the name implies, it's a lot slower and cumputing intensive... Especially if ran in a single thread...
 
     words = [word_ord for word_ord, _ in pool]
@@ -127,13 +126,13 @@ def run_test(language_launcher: helpers.LangLauncher, word: tuple[int, ...],
     cptr_tries = 0
     while cptr_tries < max_tries*2:
         print("-------------------------------------------------------------")
-        print(f"{curr_func} -- Attempt n° {cptr_tries + 1} -- Trying word: {guess} -- {len(game.pool_words)}/{len(language_launcher.words)}")
+        print(f"{curr_func} -- Attempt n° {cptr_tries + 1} -- Trying word: {''.join(chr(ord_letter) for ord_letter in guess)} -- {len(game.pool_words)}/{len(language_launcher.words)}")
 
         pattern = game.submit_guess(guess)
         if pattern == tuple([statics.StatusLetter.EXACT.value]*len(word)):
             break
 
-        pool = game.submit_guess_and_pattern(guess, ''.join(str(p) for p in pattern))
+        pool = game.submit_guess_and_pattern(guess, pattern)
         if pool is None:
             break
 

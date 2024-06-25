@@ -109,17 +109,19 @@ def get_game_session_stats(game_session: dict[str, str | wordle.Wordle | int | l
 
 
 def get_word_to_guess(game_session: dict[str, str | wordle.Wordle | int | list[str]]) -> str:
-    return ''.join(chr(ord_letter) for ord_letter in game_session['game_session'].word)
+    return "".join(chr(ord_letter) for ord_letter in game_session['game_session'].word)
 
 
 def get_guess_stats(game_session: dict[str, str | wordle.Wordle | int | list[str]], word: str, pattern: str) -> dict | dict[str, list[tuple[tuple[int, ...], float]] | set[int] | dict[str, int] | list[list[tuple[tuple[int, ...], float]]] | float]:
     if game_session['game_mode'] == statics.GameMode.GAME_MODE_PLAY.name:
         return {}
 
-    pool = game_session['game_session'].submit_guess_and_pattern(word, pattern)
+    t_word = tuple(ord(letter) for letter in word)
+    t_pattern = tuple(int(letter_status) for letter_status in pattern)
+
+    pool = game_session['game_session'].submit_guess_and_pattern(t_word, t_pattern)
     game_session['game_session'].letter_extractor = computing.update_letter_extractor(game_session['game_session'].letter_extractor,
-                                                                                      computing.build_letter_extractor(tuple(ord(letter) for letter in word),
-                                                                                                                       tuple(int(p) for p in pattern)))
+                                                                                      computing.build_letter_extractor(t_word, t_pattern))
     pool_letters, pool_letters_dupes = computing.gather_pool_letters(pool)
     suggestions = computing.build_suggestion(game_session['game_session'].language_launcher.words_information,
                                              pool_letters,
@@ -128,7 +130,7 @@ def get_guess_stats(game_session: dict[str, str | wordle.Wordle | int | list[str
 
     if game_session['game_mode'] == statics.GameMode.GAME_MODE_SOLVE.name:
         game_session['guesses'].append(word)
-        game_session['patterns'].append(statics.pattern_to_emoji(pattern))
+        game_session['patterns'].append(statics.pattern_to_emoji(t_pattern))
         game_session['last_active_timestamp'] = int(time.time())
 
     return {'pool_words': pool,
@@ -142,7 +144,7 @@ def submit_guess(game_session: dict[str, str | wordle.Wordle | int | list[str]],
     if game_session['current_tries'] >= game_session['max_tries']:
         return None
 
-    pattern = game_session['game_session'].submit_guess(word)
+    pattern = game_session['game_session'].submit_guess(tuple(ord(letter) for letter in word))
 
     if not pattern or pattern is None:
         return None
