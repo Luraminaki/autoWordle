@@ -44,26 +44,24 @@ def compute_pattern(guess: tuple[int, ...], word: tuple[int, ...]) -> tuple | tu
     return tuple(pattern)
 
 
-def build_letter_extractor(guess: tuple[int, ...], pattern: tuple[int, ...]) -> dict[str, dict] | dict[str, dict[str, int]]:
+def build_letter_extractor(guess: tuple[int, ...], pattern: tuple[int, ...]) -> dict[str, dict] | dict[str, dict[int, int]]:
     extractor: dict[str, dict] | dict[str, dict[str, int]] = {"incl": {}, "excl": {}}
 
     for pos, letter in enumerate(guess):
-        letter_chr = chr(letter)
-
         if pattern[pos] != statics.StatusLetter.MISS.value:
-            if letter_chr not in extractor["incl"]:
-                extractor["incl"][letter_chr] = 1
+            if letter not in extractor["incl"]:
+                extractor["incl"][letter] = 1
                 continue
 
-            extractor["incl"][letter_chr] = extractor["incl"][letter_chr] + 1
+            extractor["incl"][letter] = extractor["incl"][letter] + 1
             continue
 
-        extractor["excl"][letter_chr] = 1
+        extractor["excl"][letter] = 1
 
     return extractor
 
 
-def update_letter_extractor(old_ext: dict[str, dict[str, int]], new_ext: dict[str, dict[str, int]]) -> dict[str, dict] | dict[str, dict[str, int]]:
+def update_letter_extractor(old_ext: dict[str, dict[int, int]], new_ext: dict[str, dict[int, int]]) -> dict[str, dict] | dict[str, dict[int, int]]:
     for letter in new_ext["incl"]:
         if letter not in old_ext["incl"]:
             old_ext["incl"][letter] = new_ext["incl"][letter]
@@ -76,9 +74,9 @@ def update_letter_extractor(old_ext: dict[str, dict[str, int]], new_ext: dict[st
     return old_ext
 
 
-def gather_pool_letters(pool_words: list[tuple[tuple[int, ...], float]]) -> tuple[set, dict] | tuple[set[int], dict[str, int]]:
+def gather_pool_letters(pool_words: list[tuple[tuple[int, ...], float]]) -> tuple[set, dict] | tuple[set[int], dict[int, int]]:
     pool_letters = set()
-    dupes: dict[str, int] = {}
+    dupes: dict[int, int] = {}
 
     for word in pool_words:
         unique_letters = set(word[0])
@@ -87,8 +85,7 @@ def gather_pool_letters(pool_words: list[tuple[tuple[int, ...], float]]) -> tupl
         if len(unique_letters) < len(word[0]):
             for letter in unique_letters:
                 if count := word[0].count(letter):
-                    char = chr(letter)
-                    dupes[char] = count if dupes.get(char, 0) < count else dupes.get(char, count)
+                    dupes[letter] = count if dupes.get(letter, 0) < count else dupes.get(letter, count)
 
     return pool_letters, dupes
 
@@ -96,7 +93,7 @@ def gather_pool_letters(pool_words: list[tuple[tuple[int, ...], float]]) -> tupl
 def build_suggestion(pool_words_information: list[tuple[tuple[int, ...], float]],
                      pool_letters: set[int],
                      pool_letters_dupes: dict[str, int],
-                     letter_extractor: dict[str, dict[str, int]]) -> list[list] | list[list[tuple[tuple[int, ...], float]]]:
+                     letter_extractor: dict[str, dict[int, int]]) -> list[list] | list[list[tuple[tuple[int, ...], float]]]:
     known_letters = set()
 
     for letter in letter_extractor["incl"]:
@@ -105,22 +102,24 @@ def build_suggestion(pool_words_information: list[tuple[tuple[int, ...], float]]
         # then we don't add it in the known_letters (and should test it if possible)
         if pool_letters_dupes.get(letter, 0) != 0 and pool_letters_dupes.get(letter, 0) > letter_extractor["incl"].get(letter, 0):
             continue
-        known_letters.add(ord(letter))
+        known_letters.add(letter)
 
     # By design, if the letter extracted is in the exclusion list, but also in the inclusion list,
     # then it means that we know for sure how many time the letter is in the word to guess,
     # and we should have pool_letters_dupes.get(letter, 0) == letter_extractor["incl"].get(letter, 0)
     for letter in letter_extractor["excl"]:
-        known_letters.add(ord(letter))
+        known_letters.add(letter)
 
     unknown_letters = pool_letters.difference(known_letters)
     suggestions: list[list[tuple[tuple[int, ...], float]]] = [None]*(len(pool_words_information[0][0])+1)
 
     for word_information in pool_words_information:
         nb_letters_in_common = len(set(word_information[0]).intersection(unknown_letters))
+
         if suggestions[nb_letters_in_common] is None:
             suggestions[nb_letters_in_common] = [word_information]
             continue
+
         suggestions[nb_letters_in_common].append(word_information)
 
     for idx, sugg_letters_in_common in enumerate(suggestions):

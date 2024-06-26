@@ -41,7 +41,7 @@ def init_game(language_launcher: helpers.LangLauncher, word: tuple[int, ...],
 
 
 def crutch_suggestion(game: wordle.Wordle, pool: list[tuple[tuple[int, ...], float]],
-                      letter_extractor: dict[str, dict[str, int]]) -> tuple[list[tuple[int, ...]], int]:
+                      letter_extractor: dict[str, dict[int, int]]) -> tuple[list[tuple[int, ...]], int]:
     curr_func = inspect.currentframe().f_code.co_name
 
     pool_letters, pool_letters_dupes = computing.gather_pool_letters(pool)
@@ -91,7 +91,7 @@ def crutch_guess(game: wordle.Wordle, pool: list[tuple[tuple[int, ...], float]],
 
 def fast_test(game: wordle.Wordle, pool: list[tuple[tuple[int, ...], float]],
               pattern: tuple[int, ...], guess: str,
-              letter_extractor: dict[str, dict[str, int]]) -> tuple[tuple[int, ...], bool]:
+              letter_extractor: dict[str, dict[int, int]]) -> tuple[tuple[int, ...], bool]:
     # Far from being the best solver, but somewhat OK speed wise...
 
     letter_extractor = computing.update_letter_extractor(letter_extractor,
@@ -103,7 +103,7 @@ def fast_test(game: wordle.Wordle, pool: list[tuple[tuple[int, ...], float]],
 
 def slow_test(game: wordle.Wordle, pool: list[tuple[tuple[int, ...], float]],
               pattern: tuple[int, ...], guess: tuple[int, ...],
-              letter_extractor: dict[str, dict[str, int]]) -> tuple[tuple[int, ...], bool]:
+              letter_extractor: dict[str, dict[int, int]]) -> tuple[tuple[int, ...], bool]:
     # As the name implies, it's a lot slower and cumputing intensive... Especially if ran in a single thread...
 
     words = [word_ord for word_ord, _ in pool]
