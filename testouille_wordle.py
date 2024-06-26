@@ -41,7 +41,7 @@ def init_game(language_launcher: helpers.LangLauncher, word: tuple[int, ...],
 
 
 def crutch_suggestion(game: wordle.Wordle, pool: list[tuple[tuple[int, ...], float]],
-                      letter_extractor: dict[str, dict[str, int]]) -> tuple[list[str], int]:
+                      letter_extractor: dict[str, dict[str, int]]) -> tuple[list[tuple[int, ...]], int]:
     curr_func = inspect.currentframe().f_code.co_name
 
     pool_letters, pool_letters_dupes = computing.gather_pool_letters(pool)
@@ -53,12 +53,11 @@ def crutch_suggestion(game: wordle.Wordle, pool: list[tuple[tuple[int, ...], flo
     print(f"{curr_func} -- Found {len(pool_letters)} different letters to try with {len(pool_letters_dupes)} dupes")
 
     for sugg_rank in range(game.language_launcher.word_lenght - 1, 0 - 1, -1):
-        if suggestions[sugg_rank] is not None:
-            if len(suggestions[sugg_rank]) > 0:
-                print(f"{curr_func} -- Rank {sugg_rank} has {len(suggestions[sugg_rank])} suggestions")
-                break
+        if suggestions[sugg_rank]:
+            print(f"{curr_func} -- Rank {sugg_rank} has {len(suggestions[sugg_rank])} suggestions")
+            break
 
-    sugg_guesses = ["".join(chr(letter) for letter in sugg[0]) for sugg in suggestions[sugg_rank]]
+    sugg_guesses = [sugg[0] for sugg in suggestions[sugg_rank]]
     # print(f"{curr_func} -- Suggestion are {sugg_guesses}")
 
     return sugg_guesses, sugg_rank
@@ -66,7 +65,7 @@ def crutch_suggestion(game: wordle.Wordle, pool: list[tuple[tuple[int, ...], flo
 
 def crutch_guess(game: wordle.Wordle, pool: list[tuple[tuple[int, ...], float]],
                  pattern: tuple[int, ...],
-                 sugg_guesses: list[str], sugg_rank: int) -> tuple[tuple[int, ...], bool]:
+                 sugg_guesses: list[tuple[int, ...]], sugg_rank: int) -> tuple[tuple[int, ...], bool]:
     curr_func = inspect.currentframe().f_code.co_name
 
     suggestion_used = False
