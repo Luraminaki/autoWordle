@@ -178,27 +178,27 @@ def build_pattern_compendium(pool_words: set[tuple[int, ...]]) -> dict | dict[tu
     return pattern_compendium
 
 
-def compute_word_counter_by_pattern(pattern_compendium: dict[tuple[int, ...], set[tuple[tuple[int, ...], tuple[int, ...]]]]) -> dict[tuple[int, ...], dict[str, int]]:
-    word_counter_by_pattern: dict[str, dict[str, int]] = {}
+def compute_word_counter_by_pattern(pattern_compendium: dict[tuple[int, ...], set[tuple[tuple[int, ...], tuple[int, ...]]]]) -> dict[tuple[int, ...], dict[tuple[int, ...], int]]:
+    word_counter_by_pattern: dict[tuple[int, ...], dict[tuple[int, ...], int]] = {}
 
     for pattern, compendium in pattern_compendium.items():
-        pattern_words = ["".join(chr(letter) for letter in word) for word_matched in compendium for word in word_matched]
+        pattern_words = [word for word_matched in compendium for word in word_matched]
         word_counter_by_pattern[pattern] = dict(Counter(pattern_words))
 
     return word_counter_by_pattern
 
 
-def compute_word_entropy_faster(word: tuple[int, ...], word_counter_by_pattern: dict[str, dict[str, int]], nbr_words: int) -> float:
+def compute_word_entropy_faster(word: tuple[int, ...], word_counter_by_pattern: dict[tuple[int, ...], dict[tuple[int, ...], int]], nbr_words: int) -> float:
     entropy = 0.0
 
-    for _, compendium in word_counter_by_pattern.items():
-        match_probability = compendium.get("".join(chr(letter) for letter in word), 0) / nbr_words
+    for _, compendium_word_count in word_counter_by_pattern.items():
+        match_probability = compendium_word_count.get(word, 0) / nbr_words
         entropy += (match_probability * -safe_log2(match_probability))
 
     return entropy
 
 
-def compute_word_entropy_faster_worker(pool_words_chunk: set[tuple[int, ...]], word_counter_by_pattern: dict[str, dict[str, int]], nbr_words: int,
+def compute_word_entropy_faster_worker(pool_words_chunk: set[tuple[int, ...]], word_counter_by_pattern: dict[tuple[int, ...], dict[tuple[int, ...], int]], nbr_words: int,
                                        return_dict_entropy: managers.DictProxy) -> None:
     for word in pool_words_chunk:
         return_dict_entropy[word] = compute_word_entropy_faster(word, word_counter_by_pattern, nbr_words)
