@@ -117,9 +117,11 @@ async def get_word_to_guess(session_uuid: str) -> dict[str, str]:
 
 
 @app.post("/get_guess_stats")
-async def get_guess_stats(session_uuid: str, word: str, pattern: str) -> dict[str, str | dict | dict[str, list[tuple[tuple[int, ...], float]] | set[int] | dict[str, int] | list[list[tuple[tuple[int, ...], float]]] | float]]:
+async def get_guess_stats(session_uuid: str,
+                          word: str,
+                          pattern: str) -> dict[str, str | dict | dict[str, list | list[dict[str, float]] | list[str] | dict | dict[str, int] | dict[int, list[dict[str, float]]]]]:
     try:
-        stats = models.get_guess_stats(APP_SESSIONS[session_uuid], word, statics.emoji_to_pattern(pattern))
+        stats = models.get_guess_stats(APP_SESSIONS[session_uuid], word, pattern)
 
     except Exception as err:
         return { 'status': statics.StatusFunction.ERROR.name, 'error': repr(err) }
@@ -130,10 +132,8 @@ async def get_guess_stats(session_uuid: str, word: str, pattern: str) -> dict[st
 @app.post("/submit_guess")
 async def submit_guess(session_uuid: str, word: str) -> dict[str, str]:
     try:
-        if (resp_guess := models.submit_guess(APP_SESSIONS[session_uuid], word)) is None:
+        if (pattern := models.submit_guess(APP_SESSIONS[session_uuid], word)) is None:
             return { 'status': statics.StatusFunction.ERROR.name, 'error': f'INVALID_WORD {word}' }
-
-        pattern = statics.pattern_to_emoji(resp_guess)
 
     except Exception as err:
         return { 'status': statics.StatusFunction.ERROR.name, 'error': repr(err) }

@@ -67,7 +67,9 @@ def init_lang_launcher(config: Config) -> helpers.LangLauncher:
     return helpers.LangLauncher(config.dict_path, config.exhaustive, config.word_lenght)
 
 
-def create_game_session(lang_launcher: helpers.LangLauncher, compute_best_opening: bool, game_mode: str, max_tries: int=6) -> dict[str, str | wordle.Wordle | int | list[str]]:
+def create_game_session(lang_launcher: helpers.LangLauncher,
+                        compute_best_opening: bool,
+                        game_mode: str, max_tries: int=6) -> dict[str, str | wordle.Wordle | int | list[str]]:
     curr_func = inspect.currentframe().f_code.co_name
 
     if not compute_best_opening and game_mode != statics.GameMode.GAME_MODE_PLAY.name:
@@ -112,12 +114,14 @@ def get_word_to_guess(game_session: dict[str, str | wordle.Wordle | int | list[s
     return "".join(chr(ord_letter) for ord_letter in game_session['game_session'].word)
 
 
-def get_guess_stats(game_session: dict[str, str | wordle.Wordle | int | list[str]], word: str, pattern: str) -> dict | dict[str, list[tuple[tuple[int, ...], float]] | set[int] | dict[str, int] | list[list[tuple[tuple[int, ...], float]]] | float]:
+def get_guess_stats(game_session: dict[str, str | wordle.Wordle | int | list[str]],
+                    word: str,
+                    pattern: str) -> dict | dict[str, list | list[dict[str, float]] | list[str] | dict | dict[str, int] | dict[int, list[dict[str, float]]]]:
     if game_session['game_mode'] == statics.GameMode.GAME_MODE_PLAY.name:
         return {}
 
     t_word = tuple(ord(letter) for letter in word)
-    t_pattern = tuple(int(letter_status) for letter_status in pattern)
+    t_pattern = tuple(int(letter_status) for letter_status in statics.emoji_to_pattern(pattern))
 
     pool = game_session['game_session'].submit_guess_and_pattern(t_word, t_pattern)
     game_session['game_session'].letter_extractor = computing.update_letter_extractor(game_session['game_session'].letter_extractor,
@@ -130,28 +134,58 @@ def get_guess_stats(game_session: dict[str, str | wordle.Wordle | int | list[str
 
     if game_session['game_mode'] == statics.GameMode.GAME_MODE_SOLVE.name:
         game_session['guesses'].append(word)
-        game_session['patterns'].append(statics.pattern_to_emoji(t_pattern))
+        game_session['patterns'].append(pattern)
         game_session['last_active_timestamp'] = int(time.time())
 
-    return {'pool_words': pool,
-            'pool_letters': pool_letters,
-            'pool_letters_dupes': pool_letters_dupes,
-            'elimination_suggestions': suggestions,
+    return {'pool_words': convert_pool_words(pool),
+            'pool_letters': convert_pool_letters(pool_letters),
+            'pool_letters_dupes': convert_pool_letters_dupes(pool_letters_dupes),
+            'elimination_suggestions': convert_elimination_suggestions(suggestions),
             'information': game_session['game_session'].information}
 
 
-def submit_guess(game_session: dict[str, str | wordle.Wordle | int | list[str]], word: str) -> tuple | tuple[int, ...] | None:
+def submit_guess(game_session: dict[str, str | wordle.Wordle | int | list[str]], word: str) -> str | None:
     if game_session['current_tries'] >= game_session['max_tries']:
         return None
 
-    pattern = game_session['game_session'].submit_guess(tuple(ord(letter) for letter in word))
+    t_pattern = game_session['game_session'].submit_guess(tuple(ord(letter) for letter in word))
 
-    if not pattern or pattern is None:
+    if not t_pattern or t_pattern is None:
         return None
 
+    pattern = statics.pattern_to_emoji(t_pattern)
+
     game_session['guesses'].append(word)
-    game_session['patterns'].append(statics.pattern_to_emoji(pattern))
+    game_session['patterns'].append(pattern)
     game_session['current_tries'] = game_session['current_tries'] + 1
     game_session['last_active_timestamp'] = int(time.time())
 
     return pattern
+
+
+def convert_pool_words(pool: list | list[tuple[tuple[int, ...], float]]) -> list | list[dict[str, float]]:
+    return [{"".join(chr(ord_letter) for ord_letter in suggestion): round(information, 5)} for suggestion, information in pool]
+
+
+def convert_pool_letters(pool_letters: set[int]) -> list | list[str]:
+    return [chr(ord_letter) for ord_letter in pool_letters]
+
+
+def convert_pool_letters_dupes(pool_letters_dupes: dict[int, int]) -> dict | dict[str, int]:
+    return {str(key): val for key, val in pool_letters_dupes}
+
+
+def convert_elimination_suggestions(suggestions: list[list[tuple[tuple[int, ...], float]]]) -> dict | dict[int, list[dict[str, float]]]:
+    elimination_suggestions: dict[int, list[dict[str, float]]] = {}
+
+    for rank, ranked_suggestions in enumerate(suggestions):
+        if ranked_suggestions:
+            temp_suggs = [{"".join(chr(ord_letter) for ord_letter in suggestion): round(information, 5)} for suggestion, information in ranked_suggestions]
+
+            if elimination_suggestions.get(rank+1) is None:
+                elimination_suggestions[rank+1] = [temp_suggs]
+                continue
+
+            elimination_suggestions[rank+1].append(temp_suggs)
+
+    return elimination_suggestions
