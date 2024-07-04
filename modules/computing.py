@@ -13,7 +13,6 @@ import inspect
 import math
 
 from collections import Counter
-from copy import deepcopy
 from multiprocessing import Process, managers, Manager, cpu_count
 
 #pylint: disable=wrong-import-position, wrong-import-order
@@ -154,25 +153,21 @@ def prepare_worker_datas(pool_words: set[tuple[int, ...]], threads: int=0) -> tu
 
 
 def build_pattern_compendium(pool_words: set[tuple[int, ...]]) -> dict | dict[tuple[int, ...], set[tuple[tuple[int, ...], tuple[int, ...]]]]:
-    pool_words_pile: set[tuple[int, ...]] = deepcopy(pool_words)
-
     pattern_compendium: dict[tuple[int, ...], set[tuple[tuple[int, ...], tuple[int, ...]]]] = {}
 
-    while pool_words_pile:
-        word_piled = pool_words_pile.pop()
-
+    for guess in pool_words:
         for word in pool_words:
 
-            if word == word_piled:
+            if word == guess:
                 continue
 
-            pattern = compute_pattern(guess=word_piled, word=word)
+            pattern = compute_pattern(guess=guess, word=word)
 
             if pattern not in pattern_compendium:
-                pattern_compendium[pattern] = {tuple(sorted([word_piled, word]))}
+                pattern_compendium[pattern] = {tuple(sorted([guess, word]))}
                 continue
 
-            pattern_compendium[pattern].add(tuple(sorted([word_piled, word])))
+            pattern_compendium[pattern].add(tuple(sorted([guess, word])))
 
     return pattern_compendium
 
@@ -187,7 +182,9 @@ def compute_word_counter_by_pattern(pattern_compendium: dict[tuple[int, ...], se
     return word_counter_by_pattern
 
 
-def compute_word_entropy_faster(word: tuple[int, ...], word_counter_by_pattern: dict[tuple[int, ...], dict[tuple[int, ...], int]], nbr_words: int) -> float:
+def compute_word_entropy(word: tuple[int, ...],
+                         word_counter_by_pattern: dict[tuple[int, ...], dict[tuple[int, ...], int]],
+                         nbr_words: int) -> float:
     entropy = 0.0
 
     for _, compendium_word_count in word_counter_by_pattern.items():
@@ -197,15 +194,16 @@ def compute_word_entropy_faster(word: tuple[int, ...], word_counter_by_pattern: 
     return entropy
 
 
-def compute_word_entropy_faster_worker(pool_words_chunk: set[tuple[int, ...]], word_counter_by_pattern: dict[tuple[int, ...], dict[tuple[int, ...], int]], nbr_words: int,
-                                       return_dict_entropy: managers.DictProxy) -> None:
+def compute_word_entropy_worker(pool_words_chunk: set[tuple[int, ...]],
+                                word_counter_by_pattern: dict[tuple[int, ...], dict[tuple[int, ...], int]],
+                                nbr_words: int, return_dict_entropy: managers.DictProxy) -> None:
     for word in pool_words_chunk:
-        return_dict_entropy[word] = compute_word_entropy_faster(word, word_counter_by_pattern, nbr_words)
+        return_dict_entropy[word] = compute_word_entropy(word, word_counter_by_pattern, nbr_words)
 
 
-def compute_words_information_faster(pool_words: set[tuple[int, ...]],
-                                     pattern_compendium: dict[tuple[int, ...], set[tuple[tuple[int, ...], tuple[int, ...]]]],
-                                     threads: int=0) -> list | list[tuple[tuple[int, ...], float]]:
+def compute_words_information(pool_words: set[tuple[int, ...]],
+                              pattern_compendium: dict[tuple[int, ...], set[tuple[tuple[int, ...], tuple[int, ...]]]],
+                              threads: int=0) -> list | list[tuple[tuple[int, ...], float]]:
     curr_func = inspect.currentframe().f_code.co_name
 
     words_information: list | list[tuple[tuple[int, ...], float]] = []
@@ -213,7 +211,7 @@ def compute_words_information_faster(pool_words: set[tuple[int, ...]],
     word_counter_by_pattern = compute_word_counter_by_pattern(pattern_compendium)
 
     for pool_words_chunk in pool_words_chunked:
-        jobs.append(Process(target=compute_word_entropy_faster_worker,
+        jobs.append(Process(target=compute_word_entropy_worker,
                             args=(set(pool_words_chunk), word_counter_by_pattern, len(pool_words), return_dict_entropy)))
         jobs[-1].start()
 

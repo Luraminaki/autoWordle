@@ -108,7 +108,7 @@ def slow_test(game: wordle.Wordle, pool: list[tuple[tuple[int, ...], float]],
 
     words = [word_ord for word_ord, _ in pool]
     pattern_compendium = computing.build_pattern_compendium(words)
-    updated_pool = computing.compute_words_information_faster(words, pattern_compendium, game.language_launcher.threads)
+    updated_pool = computing.compute_words_information(words, pattern_compendium, game.language_launcher.threads)
 
     return fast_test(game, updated_pool, pattern, guess, letter_extractor)
 

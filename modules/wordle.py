@@ -89,7 +89,7 @@ class Wordle ():
 
         # print(f"{curr_func} -- Computing matches information...")
         pool_pattern_compendium = computing.build_pattern_compendium(self.pool_words)
-        pool_words_information = computing.compute_words_information_faster(self.pool_words, pool_pattern_compendium)
+        pool_words_information = computing.compute_words_information(self.pool_words, pool_pattern_compendium)
 
         # print(f"{curr_func} -- Computing remaining information...")
         self.information = -computing.safe_log2(1.0/float(len(pool_words_information)))
