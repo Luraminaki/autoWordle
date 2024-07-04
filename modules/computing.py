@@ -34,7 +34,7 @@ def compute_pattern(guess: tuple[int, ...], word: tuple[int, ...]) -> tuple | tu
             temp_guess[w_cptr] = -1
 
         else:
-            if temp_guess.count(w_letter) == 0:
+            if w_letter not in temp_guess:
                 continue
 
             idx = temp_guess.index(w_letter)
