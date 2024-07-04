@@ -119,7 +119,7 @@ class CacheDB:
         if fields_info:
             return all((key, val.split(' ', maxsplit=1)[0]) in fields_info for (key, val) in self.columns.items())
 
-        print(f"{curr_func} -- table {table_name} failed PRAGMA table_info query")
+        # print(f"{curr_func} -- table {table_name} failed PRAGMA table_info query")
         return False
 
 
