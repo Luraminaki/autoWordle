@@ -163,10 +163,10 @@ def build_pattern_compendium(pool_words: set[tuple[int, ...]]) -> dict | dict[tu
         pattern = compute_pattern(guess=guess, word=word)
 
         if pattern not in pattern_compendium:
-            pattern_compendium[pattern] = {tuple(sorted([guess, word]))}
+            pattern_compendium[pattern] = {(guess, word)}
             continue
 
-        pattern_compendium[pattern].add(tuple(sorted([guess, word])))
+        pattern_compendium[pattern].add((guess, word))
 
     return pattern_compendium
 
@@ -175,7 +175,7 @@ def compute_word_counter_by_pattern(pattern_compendium: dict[tuple[int, ...], se
     word_counter_by_pattern: dict[tuple[int, ...], dict[tuple[int, ...], int]] = {}
 
     for pattern, compendium in pattern_compendium.items():
-        pattern_words = [word for word_matched in compendium for word in word_matched]
+        pattern_words = [guess for guess, _ in compendium]
         word_counter_by_pattern[pattern] = dict(Counter(pattern_words))
 
     return word_counter_by_pattern

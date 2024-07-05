@@ -77,8 +77,8 @@ class Wordle ():
         pool_words: set[tuple[int, ...]] = set()
         for pair_words in self.language_launcher.get_couples_from_compendium(pattern):
             try:
-                conj = int(not bool(pair_words.index(guess)))
-                pool_words.add(pair_words[conj])
+                if conj := int(not bool(pair_words.index(guess))):
+                    pool_words.add(pair_words[conj])
             except:
                 pass
         self.pool_words = self.pool_words.intersection(pool_words)
