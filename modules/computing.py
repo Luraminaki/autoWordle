@@ -10,6 +10,7 @@ Created on Wed May 15 15:10:51 2024
 #===================================================================================================
 import inspect
 
+import itertools
 import math
 
 from collections import Counter
@@ -155,19 +156,17 @@ def prepare_worker_datas(pool_words: set[tuple[int, ...]], threads: int=0) -> tu
 def build_pattern_compendium(pool_words: set[tuple[int, ...]]) -> dict | dict[tuple[int, ...], set[tuple[tuple[int, ...], tuple[int, ...]]]]:
     pattern_compendium: dict[tuple[int, ...], set[tuple[tuple[int, ...], tuple[int, ...]]]] = {}
 
-    for guess in pool_words:
-        for word in pool_words:
+    for word, guess in itertools.permutations(pool_words, 2):
+        if word == guess:
+            continue
 
-            if word == guess:
-                continue
+        pattern = compute_pattern(guess=guess, word=word)
 
-            pattern = compute_pattern(guess=guess, word=word)
+        if pattern not in pattern_compendium:
+            pattern_compendium[pattern] = {tuple(sorted([guess, word]))}
+            continue
 
-            if pattern not in pattern_compendium:
-                pattern_compendium[pattern] = {tuple(sorted([guess, word]))}
-                continue
-
-            pattern_compendium[pattern].add(tuple(sorted([guess, word])))
+        pattern_compendium[pattern].add(tuple(sorted([guess, word])))
 
     return pattern_compendium
 
