@@ -10,6 +10,7 @@ Created on Tue Apr 30 11:28:51 2024
 #===================================================================================================
 import time
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
 #pylint: disable=wrong-import-position, wrong-import-order
 import models
@@ -20,6 +21,14 @@ from modules import statics
 __version__ = '0.1.0'
 
 app = FastAPI()
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 APP_SOURCES = models.init_app_sources()
 APP_SESSIONS = models.APP_SESSIONS
