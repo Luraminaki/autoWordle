@@ -1,0 +1,55 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "autowordle"
+version = "0.2.0"
+description = "Wordle / Motus solver game web app."
+readme = "README.md"
+requires-python = ">=3.12"
+license = { text = "GPL-3.0-only" }
+dependencies = [
+    "fastapi",
+    "fastapi-cli",
+    "numpy",
+    "pydantic",
+    "unidecode",
+]
+
+[project.optional-dependencies]
+dev = [
+    "ruff",
+    "pytest",
+    "pytest-cov",
+    "httpx",
+]
+
+[tool.setuptools]
+packages = ["autoWordle", "autoWordle.app", "autoWordle.modules", "autoWordle.webapp"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 150
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "D", "N", "B", "SIM", "RUF"]
+ignore = [
+    "D203",   # one-blank-line-before-class: conflicts with D211 (we use D211)
+    "D212",   # multi-line-summary-first-line: conflicts with D213 (we use D213)
+    "N818",   # exception name suffix: `GameSessionNotAllowedError` already fits, but don't force it repo-wide
+    "N999",   # `autoWordle` is a deliberate, explicitly-chosen mixed-case package name
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["D100", "D103"]  # test modules/functions: names are the documentation
+"scripts/*" = ["D100", "D103", "T201"]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.ruff.lint.isort]
+known-first-party = ["autoWordle"]

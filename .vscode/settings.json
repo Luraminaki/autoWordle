@@ -6,16 +6,12 @@
         "**/CVS": true,
         "**/.DS_Store": true,
         "**/Thumbs.db": true,
-        "*.egg-info": true
+        "*.egg-info": true,
+        "*.venv": true
     },
     "breadcrumbs.enabled": true,
     "editor.formatOnSave": false,
     "git.autofetch": true,
-    "pylint.args": [
-        "--disable=C0103, C0111, C0209, C0301, C0415, E0401, R0201, R0902, R0903, R0904, R0913, R0914, R0915, W0102, W1202, W1203, W0702, W0703",
-        "--extension-pkg-whitelist=cv2",
-        "--generated-members=cv2.*"
-    ],
     "explorer.confirmDelete": false,
     "files.associations": {
         "cctype": "cpp",
@@ -75,12 +71,24 @@
         "valarray": "cpp",
         "variant": "cpp"
     },
-    "python.testing.pytestArgs": [
-        ""
-    ],
     "python.testing.unittestEnabled": false,
     "python.testing.pytestEnabled": false,
-    "python.testing.promptToConfigure": false,
-    "python.languageServer": "Pylance",
-    "typescript.tsdk": "node_modules/typescript/lib"
+    "python.languageServer": "None",
+    "python.analysis.typeCheckingMode": "off",
+    "python.analysis.extraPaths": [],
+    "python.analysis.useLibraryCodeForTypes": true,
+    "python.analysis.stubPath": "",
+    "editor.inlayHints.enabled": "off",
+    "basedpyright.analysis.diagnosticSeverityOverrides": {
+        "reportAny": "none",
+        "reportMissingTypeArgument": "none",
+        "reportUnknownArgumentType": "none",
+        "reportUnknownMemberType": "none",
+        "reportUnknownParameterType": "none",
+        "reportUnknownVariableType": "none"
+    },
+    "ruff.nativeServer": true,
+    "flake8.enabled": false,
+    "pylint.enabled": false,
+    "python-envs.pythonProjects": []
 }

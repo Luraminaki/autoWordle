@@ -5,3 +5,12 @@ node_modules
 .venv
 .venv.lnk
 *.zip
+*.pkl
+*.sqlite
+*.csv
+*.prof
+*.log
+*.egg-info/
+.pytest_cache/
+__pycache__/
+.ruff_cache/
