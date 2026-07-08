@@ -13,7 +13,7 @@ import time
 from collections.abc import Callable
 
 from autoWordle.app import logging_utils
-from autoWordle.modules import computing, entropy, helpers, statics, wordle
+from autoWordle.modules import computing, helpers, statics, wordle
 
 #===================================================================================================
 
@@ -101,20 +101,20 @@ def fast_test(game: wordle.Wordle, pool: list[tuple[tuple[int, ...], float]],
     """Far from being the best solver, but somewhat OK speed wise..."""
     letter_extractor = computing.update_letter_extractor(letter_extractor,
                                                          computing.build_letter_extractor(guess, pattern))
-    sugg_guesses, sugg_rank = crutch_suggestion(game, pool, letter_extractor)
 
-    return crutch_guess(game, pool, pattern, sugg_guesses, sugg_rank)
+    # `crutch_suggestion` scans the *entire* word list (not just `pool`) to
+    # build its suggestion - only worth paying for when `crutch_guess` could
+    # actually end up using the result. Checking the part of that condition
+    # that doesn't depend on `crutch_suggestion`'s own output first (see
+    # `crutch_guess`) skips that scan whenever it wouldn't be used anyway -
+    # observed to be ~90% of guesses in practice.
+    thresh_sugg = (game.language_launcher.word_length % 2) + game.language_launcher.word_length // 2
 
+    if len(pool) > 2 and pattern.count(statics.StatusLetter.EXACT.value) >= thresh_sugg:
+        sugg_guesses, sugg_rank = crutch_suggestion(game, pool, letter_extractor)
+        return crutch_guess(game, pool, pattern, sugg_guesses, sugg_rank)
 
-def slow_test(game: wordle.Wordle, pool: list[tuple[tuple[int, ...], float]],
-              pattern: tuple[int, ...], guess: tuple[int, ...],
-              letter_extractor: dict[str, dict[int, int]]) -> tuple[tuple[int, ...], bool]:
-    """As the name implies, it's a lot slower and computing intensive... Especially if ran in a single thread..."""
-    words = {word_ord for word_ord, _ in pool}
-    pattern_compendium = computing.build_pattern_compendium(words)
-    updated_pool = entropy.compute_words_information(words, pattern_compendium, game.language_launcher.threads)
-
-    return fast_test(game, updated_pool, pattern, guess, letter_extractor)
+    return pool[0][0], False
 
 
 def run_test(language_launcher: helpers.LangLauncher, word: tuple[int, ...],
@@ -191,8 +191,7 @@ def main() -> None:
     max_tries = 6
     threads = 0
 
-    # func_test = fast_test
-    func_test = slow_test
+    func_test = fast_test
 
     language_launcher = helpers.LangLauncher(file_path, best_opening, max_chars, threads)
     max_games = 5  # len(language_launcher.words) # 0 and 1 are forbidden !

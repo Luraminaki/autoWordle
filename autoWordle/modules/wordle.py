@@ -82,15 +82,7 @@ class Wordle:
             logger.info("Pool words is empty")
             return None
 
-        pool_words: set[computing.Tord] = set()
-
-        for cand_01, cand_02 in self.language_launcher.get_couples_from_compendium(pattern):
-            if cand_01 == guess:
-                pool_words.add(cand_02)
-            elif cand_02 == guess:
-                pool_words.add(cand_01)
-            else:
-                continue
+        pool_words = self.language_launcher.get_matching_words(guess, pattern)
 
         self.pool_words = self.pool_words.intersection(pool_words)
 

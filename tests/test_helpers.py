@@ -4,7 +4,7 @@
 #===================================================================================================
 import pathlib
 
-from autoWordle.modules import helpers
+from autoWordle.modules import computing, helpers
 
 #===================================================================================================
 
@@ -37,3 +37,37 @@ def test_init_lang_app_data_client_view_has_no_live_objects(tmp_path: pathlib.Pa
     pre_computed = app_sources['mini']['pre_computed']['5']
     assert pre_computed['lang_launcher'] == 'LangLauncher'
     assert isinstance(pre_computed['path'], str)
+
+
+def test_get_matching_words_matches_brute_force_reference(tmp_path: pathlib.Path, mini_words_file: pathlib.Path) -> None:
+    # Regression test for the get_couples_from_compendium -> get_matching_words
+    # rewrite: results must match brute-force `computing.compute_pattern`
+    # exactly, including *excluding* words that only coincidentally equal
+    # `guess` as some other guess's recorded target (the old code's `elif
+    # cand_02 == guess` branch would have spuriously included those).
+    words_file = tmp_path / 'mini.txt'
+    _ = words_file.write_text(mini_words_file.read_text(encoding='utf-8'), encoding='utf-8')
+
+    lang_launcher = helpers.LangLauncher(words_file, compute_best_opening=True, word_length=5)
+    shift = lang_launcher.shift
+
+    guess = tuple(ord(c) - shift for c in 'crane')
+    target = tuple(ord(c) - shift for c in 'grape')
+    pattern = computing.compute_pattern(guess=guess, word=target)
+
+    matches = lang_launcher.get_matching_words(guess, pattern)
+    expected = {word for word in lang_launcher.words if computing.compute_pattern(guess=guess, word=word) == pattern}
+
+    assert matches == expected
+    assert target in matches
+
+
+def test_get_matching_words_without_cache_returns_empty(tmp_path: pathlib.Path, mini_words_file: pathlib.Path) -> None:
+    words_file = tmp_path / 'mini.txt'
+    _ = words_file.write_text(mini_words_file.read_text(encoding='utf-8'), encoding='utf-8')
+
+    lang_launcher = helpers.LangLauncher(words_file, compute_best_opening=False, word_length=5)
+    assert lang_launcher.cache is None
+
+    guess = tuple(ord(c) - lang_launcher.shift for c in 'crane')
+    assert lang_launcher.get_matching_words(guess, (1, 1, 1, 1, 1)) == set()

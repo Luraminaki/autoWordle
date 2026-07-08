@@ -34,6 +34,27 @@ def test_get_entries_missing_pattern_returns_empty(tmp_path: pathlib.Path) -> No
     cache.close()
 
 
+def test_get_words_for_guess_filters_by_guess(tmp_path: pathlib.Path) -> None:
+    cache = compendium_cache.CacheDB(tmp_path / 'cache.sqlite', patterns=[111], build_mode=True)
+    # Two different guesses share pattern 111; only guess 1's targets should
+    # come back for guess=1, not guess 2's - the whole point of filtering
+    # server-side instead of fetching every row for the pattern.
+    assert cache.add_entries(111, guess=[1, 1, 2], word=[10, 20, 30])
+
+    assert sorted(cache.get_words_for_guess(111, 1)) == [10, 20]
+    assert cache.get_words_for_guess(111, 2) == [30]
+    cache.close()
+
+
+def test_get_words_for_guess_missing_pattern_or_guess_returns_empty(tmp_path: pathlib.Path) -> None:
+    cache = compendium_cache.CacheDB(tmp_path / 'cache.sqlite', patterns=[111], build_mode=True)
+    assert cache.add_entries(111, guess=[1], word=[10])
+
+    assert cache.get_words_for_guess(999, 1) == []
+    assert cache.get_words_for_guess(111, 42) == []
+    cache.close()
+
+
 def test_add_entries_rejects_mismatched_lengths(tmp_path: pathlib.Path) -> None:
     cache = compendium_cache.CacheDB(tmp_path / 'cache.sqlite', patterns=[111], build_mode=True)
     assert cache.add_entries(111, guess=[1, 2], word=[10]) is False

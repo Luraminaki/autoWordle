@@ -65,20 +65,32 @@ class LangLauncher:
         return self.__class__.__name__
 
 
-    def get_couples_from_compendium(self, pattern: computing.Tord) -> set[tuple[computing.Tord, computing.Tord]]:
-        """Look up every `(guess, word)` pair that produces `pattern`.
+    def get_matching_words(self, guess: computing.Tord, pattern: computing.Tord) -> set[computing.Tord]:
+        """Look up every word that would produce `pattern` if `guess` were played against it.
+
+        Filters by `guess` inside the cache lookup itself (server-side, in
+        SQLite) rather than fetching every pair ever recorded for `pattern`
+        (across every guess in the source pool - tens of thousands of rows
+        for a real word list) and filtering in Python: profiled as the
+        dominant cost of live per-guess pool narrowing when this instead
+        unpacked every row via `word_codec.tord_from_int` only to discard
+        all but a handful that didn't match `guess`.
 
         Args:
-            pattern: Pattern to look up.
+            guess: Guess actually played.
+            pattern: Resulting pattern for `guess`.
 
         Returns:
-            set[tuple[Tord, Tord]]: Matching `(guess, word)` pairs, empty if no cache is loaded.
+            set[Tord]: Matching target words, empty if no cache is loaded or none match.
         """
         if self.cache is None:
             return set()
 
-        return {(word_codec.tord_from_int(guess, self.word_length), word_codec.tord_from_int(word, self.word_length))
-               for guess, word in self.cache.get_entries(word_codec.tord_to_int(pattern, 10))}
+        guess_int = word_codec.tord_to_int(guess)
+        pattern_int = word_codec.tord_to_int(pattern, 10)
+
+        return {word_codec.tord_from_int(word, self.word_length)
+               for word in self.cache.get_words_for_guess(pattern_int, guess_int)}
 
 
     def _build_cache(self, path: pathlib.Path) -> tuple[compendium_cache.CacheDB, computing.WordCounterByPattern]:

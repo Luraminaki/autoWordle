@@ -166,6 +166,37 @@ class CacheDB:
             return []
 
 
+    def get_words_for_guess(self, pattern: int, guess: int) -> list[int]:
+        """Fetch every target word recorded for a given pattern *and* guess.
+
+        Filters server-side (`WHERE guess = ?`) instead of `get_entries`
+        fetching every row for `pattern` and filtering in Python - a single
+        pattern's table holds every guess's matches across the whole source
+        pool (tens of thousands of rows for a real word list), of which only
+        a handful ever match one specific guess. Profiled as the dominant
+        cost of live per-guess pool narrowing before this method existed.
+
+        Args:
+            pattern: Pattern to look up, packed as an int.
+            guess: Guess to filter by, packed as an int.
+
+        Returns:
+            list[int]: Packed target-word ints, empty if that pattern has no
+            table (never occurred in the source pool) or none match `guess`.
+        """
+        try:
+            with self.lock:
+                return [row[0] for row in self.db.execute(f'SELECT word FROM "{pattern}" WHERE guess = ?', (guess,))]
+
+        except sqlite3.OperationalError:
+            logger.debug("No table for pattern %s (never occurred in the source pool)", pattern)
+            return []
+
+        except Exception:
+            logger.exception("Failed to SELECT entries for pattern %s and guess %s", pattern, guess)
+            return []
+
+
     def close(self) -> None:
         """Close the underlying SQLite connection."""
         with self.lock:
