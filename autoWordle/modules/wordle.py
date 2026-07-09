@@ -9,9 +9,20 @@ import logging
 import random
 import time
 
-from autoWordle.modules import computing, entropy, helpers, statics
+from autoWordle.modules import computing, entropy, helpers, statics, vectorized_compendium
 
 logger = logging.getLogger(__name__)
+
+# Above this pool size, only pool members are considered as the next guess
+# (today's behavior, cheap: O(pool_size**2)). At or below it, every word in
+# the language is also scored against the current pool (`best_guesses`) -
+# benchmarked at a near-fixed ~400-500ms regardless of pool size (dominated
+# by the per-guess Python loop over the whole dictionary, not pool size), so
+# it's only worth paying for once the pool is small enough that a same-family
+# cluster (e.g. "wight"/"tight"/"night"/"might"/"fight") is actually plausible
+# - comfortably covers the failure range observed in a real 2315-game
+# self-play run (pool sizes 2-9 at the point of failure).
+_FULL_SCAN_POOL_THRESHOLD = 50
 
 
 class Wordle:
@@ -30,7 +41,14 @@ class Wordle:
         self.information: float = 0.0
         self.word: computing.Tord = ()
         self.shift: int = language_launcher.shift
-        self.letter_extractor: computing.LetterExtractor = {'incl': {}, 'excl': {}}
+        self.letter_extractor: computing.LetterExtractor = computing.LetterExtractor()
+        # Best next-guess ranking: pool-only entropy while the pool is large
+        # (cheap, already what `pool_words_information` is), or full-dictionary
+        # entropy against the current pool once it's small enough to be worth
+        # the extra cost (see `_FULL_SCAN_POOL_THRESHOLD`) - set by
+        # `submit_guess_and_pattern`, not `reset()`, since there's nothing
+        # meaningful to narrow yet at the start of a fresh game.
+        self.best_guesses: computing.WordsInformation = []
 
         self.reset()
         logger.info("Remaining information is: %s bit(s)", round(self.information, 2))
@@ -53,7 +71,8 @@ class Wordle:
         self.information = -computing.safe_log2(1.0 / float(len(self.pool_words)))
         self.word = random.choice(list(self.pool_words))
 
-        self.letter_extractor = {'incl': {}, 'excl': {}}
+        self.letter_extractor = computing.LetterExtractor()
+        self.best_guesses = []
 
 
     def submit_guess_and_pattern(self, guess: computing.Tord, pattern: computing.Tord) -> computing.WordsInformation | None:
@@ -94,6 +113,24 @@ class Wordle:
         pool_words_information = entropy.compute_words_information(self.pool_words, pool_pattern_compendium)
 
         self.information = -computing.safe_log2(1.0 / float(len(pool_words_information)))
+
+        # Pool-only ranking by default; once the pool is small enough that a
+        # same-family cluster is plausible (e.g. "wight"/"tight"/"night"/
+        # "might"/"fight" - guessing any one against any other always
+        # produces the identical pattern, so pool-only guessing can only
+        # eliminate one candidate per guess), also score every word in the
+        # language against the current pool - a word outside the family that
+        # tests several of the differentiating letters at once can split it
+        # in one guess instead. Gated by size: benchmarked at a near-fixed
+        # ~400-500ms regardless of pool size, so not worth paying for on
+        # every turn (see `_FULL_SCAN_POOL_THRESHOLD`).
+        self.best_guesses = pool_words_information
+        if 1 < len(self.pool_words) <= _FULL_SCAN_POOL_THRESHOLD:
+            dictionary_counter = vectorized_compendium.compute_word_counter_by_pattern_cross(
+                self.language_launcher.words, self.pool_words)
+            self.best_guesses = entropy.rank_words_by_entropy(
+                self.language_launcher.words, dictionary_counter, self.language_launcher.threads,
+                nbr_words=len(self.pool_words))
 
         tac = time.perf_counter() - tic
 

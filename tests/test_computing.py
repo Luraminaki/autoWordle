@@ -63,12 +63,12 @@ def test_build_letter_extractor_and_update() -> None:
     pattern = (EXACT, MISS, MISPLACED, MISS, EXACT)
 
     extractor = computing.build_letter_extractor(guess, pattern)
-    assert extractor['incl'] == {1: 1, 3: 1, 5: 1}
-    assert extractor['excl'] == {2: 1, 4: 1}
+    assert extractor.incl == {1: 1, 3: 1, 5: 1}
+    assert extractor.excl == {2: 1, 4: 1}
 
-    merged = computing.update_letter_extractor({'incl': {1: 1}, 'excl': {}}, extractor)
-    assert merged['incl'] == {1: 2, 3: 1, 5: 1}
-    assert merged['excl'] == {2: 1, 4: 1}
+    merged = computing.update_letter_extractor(computing.LetterExtractor(incl={1: 1}), extractor)
+    assert merged.incl == {1: 2, 3: 1, 5: 1}
+    assert merged.excl == {2: 1, 4: 1}
 
 
 def test_gather_pool_letters_detects_dupes() -> None:

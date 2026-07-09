@@ -21,6 +21,7 @@ just with a vectorized inner loop.
 
 import logging
 import time
+from collections import Counter
 from collections.abc import Callable
 
 import numpy as np
@@ -94,6 +95,44 @@ def _compute_patterns_for_guess(guess_row: np.ndarray, words_arr: np.ndarray) ->
 
     units = (10 ** np.arange(length - 1, -1, -1)).astype(np.int64)
     return pattern.astype(np.int64) @ units
+
+
+def compute_word_counter_by_pattern_cross(guesses: set[Tord], targets: set[Tord]) -> WordCounterByPattern:
+    """Tally, per pattern, how many `targets` each of `guesses` would match.
+
+    Unlike `stream_pattern_compendium_to_cache` (one shared set, used as both
+    guesses and targets, streamed to a persisted SQLite cache), `guesses` and
+    `targets` are different sets here - e.g. the full word list scored
+    against a narrowed candidate pool (see `wordle.Wordle.submit_guess_and_pattern`'s
+    full-dictionary fallback) - and the result is purely an in-memory,
+    ephemeral ranking input for one live decision, never written to a cache.
+
+    A guess that happens to also be a member of `targets` is *not* excluded
+    (unlike `computing.build_pattern_compendium`'s self-pair skip): guessing
+    a word that could itself be the answer legitimately produces the
+    all-EXACT pattern, and that's meaningful information to keep, not a
+    redundant self-comparison to discard.
+
+    Args:
+        guesses: Candidate guesses to evaluate (e.g. the full word list).
+        targets: Possible remaining answers (e.g. the current narrowed pool).
+
+    Returns:
+        WordCounterByPattern: Pattern -> {guess: occurrence count against `targets`}.
+    """
+    targets_arr = np.array(list(targets), dtype=np.int16)
+    word_length = targets_arr.shape[1]
+
+    word_counter_by_pattern: WordCounterByPattern = {}
+
+    for guess in guesses:
+        pattern_ints = _compute_patterns_for_guess(np.array(guess, dtype=np.int16), targets_arr)
+
+        for pattern_int, count in Counter(int(p) for p in pattern_ints).items():
+            pattern_tuple = word_codec.tord_from_int(pattern_int, word_length, units=10)
+            word_counter_by_pattern.setdefault(pattern_tuple, {})[guess] = count
+
+    return word_counter_by_pattern
 
 
 def stream_pattern_compendium_to_cache(pool_words: set[Tord], cache: compendium_cache.CacheDB,

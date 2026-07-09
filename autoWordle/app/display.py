@@ -9,7 +9,7 @@ no session/app-state concerns of their own - they're only ever called from
 @rules: https://en.wikipedia.org/wiki/Wordle
 """
 
-from autoWordle.modules.computing import WordsInformation
+from autoWordle.modules.computing import Tord, WordsInformation
 
 
 def convert_pool_words(pool: list[tuple[tuple[int, ...], float]], shift: int) -> list[dict[str, float]]:
@@ -24,6 +24,23 @@ def convert_pool_words(pool: list[tuple[tuple[int, ...], float]], shift: int) ->
     """
     return [{''.join(chr(ord_letter + shift) for ord_letter in suggestion): round(information, 5)}
             for suggestion, information in pool]
+
+
+def convert_best_guess(best_guess: tuple[Tord, float] | None, shift: int) -> dict[str, float] | None:
+    """Convert a single `(word, entropy)` pair into a display-ready entry.
+
+    Args:
+        best_guess: The highest-entropy next guess, or `None` if unavailable.
+        shift: Ordinal shift used to decode letters back to characters.
+
+    Returns:
+        dict[str, float] | None: `{word: entropy}`, or `None` if `best_guess` is `None`.
+    """
+    if best_guess is None:
+        return None
+
+    word, information = best_guess
+    return {''.join(chr(ord_letter + shift) for ord_letter in word): round(information, 5)}
 
 
 def convert_pool_letters(pool_letters: set[int], shift: int) -> list[str]:

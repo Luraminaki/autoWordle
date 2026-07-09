@@ -42,9 +42,6 @@ class GameSession:
     game: wordle.Wordle
 
 
-APP_SESSIONS: dict[str, GameSession] = {}
-
-
 @overload
 def init_app_sources(app_root: pathlib.Path | None = None, client: Literal[False] = False) -> schemas.AppSources: ...
 @overload
@@ -215,18 +212,25 @@ def get_guess_stats(session: GameSession, word: str, pattern: str) -> schemas.Gu
     game.letter_extractor = computing.update_letter_extractor(game.letter_extractor,
                                                               computing.build_letter_extractor(t_word, t_pattern))
     pool_letters, pool_letters_dupes = computing.gather_pool_letters(pool)
-    suggestions = computing.build_suggestion(game.language_launcher.words_information,
-                                             pool_letters, pool_letters_dupes, game.letter_extractor)
+    # `game.best_guesses` reflects the *current* pool (pool-only entropy while
+    # it's still large, full-dictionary-vs-current-pool entropy once it's
+    # small enough - see `wordle.Wordle.submit_guess_and_pattern`), unlike
+    # the static, precomputed-once-at-startup `language_launcher.words_information`
+    # this used to be fed, which never adapted to the game's actual progress.
+    suggestions = computing.build_suggestion(game.best_guesses, pool_letters, pool_letters_dupes, game.letter_extractor)
 
     if session.meta.game_mode == statics.GameMode.GAME_MODE_SOLVE:
         session.meta.guesses.append(word)
         session.meta.patterns.append(pattern)
         session.meta.last_active_timestamp = int(time.time())
 
+    best_guess = game.best_guesses[0] if game.best_guesses else None
+
     return schemas.GuessStats(pool_words=display.convert_pool_words(pool, game.shift),
                               pool_letters=display.convert_pool_letters(pool_letters, game.shift),
                               pool_letters_dupes=display.convert_pool_letters_dupes(pool_letters_dupes, game.shift),
                               elimination_suggestions=display.convert_elimination_suggestions(suggestions, game.shift),
+                              best_guess=display.convert_best_guess(best_guess, game.shift),
                               information=game.information)
 
 

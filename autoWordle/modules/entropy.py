@@ -86,17 +86,24 @@ def _entropy_worker(word: Tord) -> tuple[Tord, float]:
     return word, compute_word_entropy(word, _worker_word_counter_by_pattern, _worker_nbr_words)
 
 
-def rank_words_by_entropy(pool_words: set[Tord], word_counter_by_pattern: WordCounterByPattern, threads: int = 0) -> WordsInformation:
-    """Rank every word in a pool by its entropy against that pool, in parallel.
+def rank_words_by_entropy(pool_words: set[Tord], word_counter_by_pattern: WordCounterByPattern,
+                         threads: int = 0, nbr_words: int | None = None) -> WordsInformation:
+    """Rank every word in a pool by its entropy against a target pool, in parallel.
 
     Args:
-        pool_words: Candidate words to rank.
+        pool_words: Candidate words to rank as guesses.
         word_counter_by_pattern: Pre-built pattern -> {guess: occurrence count}.
             Callers that already have this (e.g. `helpers`'s streaming
             precomputation, which builds it directly without ever
             materializing a full `PatternCompendium`) should call this
             directly instead of `compute_words_information`.
         threads: Worker process count. `<= 0` or greater than the CPU count uses all CPUs.
+        nbr_words: Size of the *target* pool the entropy probabilities are
+            computed against. Defaults to `len(pool_words)`, correct when
+            `pool_words` is both the guesses being ranked and the possible
+            targets (every caller before the full-dictionary-vs-narrowed-pool
+            fallback in `wordle.py`) - pass this explicitly when `pool_words`
+            (guesses) and the actual target pool are different sets.
 
     Returns:
         WordsInformation: `(word, entropy)` pairs sorted by entropy, descending.
@@ -104,7 +111,9 @@ def rank_words_by_entropy(pool_words: set[Tord], word_counter_by_pattern: WordCo
     if not 0 < threads <= cpu_count():
         threads = cpu_count()
 
-    nbr_words = len(pool_words)
+    if nbr_words is None:
+        nbr_words = len(pool_words)
+
     chunksize = max(1, len(pool_words) // (threads * 4) or 1)
 
     with ProcessPoolExecutor(max_workers=threads, initializer=_entropy_worker_init,

@@ -140,4 +140,11 @@ class GuessStats(BaseModel):
     pool_letters: list[str] = Field(default_factory=list)
     pool_letters_dupes: dict[str, int] = Field(default_factory=dict)
     elimination_suggestions: dict[int, list[dict[str, float]]] = Field(default_factory=dict)
+    # The single highest-entropy next guess (`wordle.Wordle.best_guesses[0]`) -
+    # pool-only while the pool is still large, full-dictionary-vs-current-pool
+    # once it's small enough to be worth the extra cost (see
+    # `wordle._FULL_SCAN_POOL_THRESHOLD`). Distinct from `elimination_suggestions`,
+    # which buckets candidates by unknown-letter coverage for a human to choose
+    # between - this is "just tell me the best move" instead.
+    best_guess: dict[str, float] | None = None
     information: float = 0.0

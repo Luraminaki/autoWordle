@@ -54,6 +54,36 @@ def test_compute_patterns_for_guess_exhaustive_against_reference(mini_words_file
             assert int(pattern_ints[wi]) == expected
 
 
+def test_compute_word_counter_by_pattern_cross_matches_brute_force(mini_words_file: pathlib.Path) -> None:
+    words = list(word_codec.get_words_list(mini_words_file, word_length=5, shift=ord('a') - 10))
+    guesses = set(words)
+    targets = set(words[:6])  # a narrowed pool subset, distinct from the full guess set
+
+    actual = vectorized_compendium.compute_word_counter_by_pattern_cross(guesses, targets)
+
+    expected: dict[tuple[int, ...], dict[tuple[int, ...], int]] = {}
+    for guess in guesses:
+        for target in targets:
+            pattern = computing.compute_pattern(guess=guess, word=target)
+            expected.setdefault(pattern, {})[guess] = expected.get(pattern, {}).get(guess, 0) + 1
+
+    assert actual == expected
+
+
+def test_compute_word_counter_by_pattern_cross_includes_self_match(mini_words_file: pathlib.Path) -> None:
+    # Unlike `computing.build_pattern_compendium`'s self-pair skip, a guess
+    # that's also a target should register its own all-EXACT match - that's
+    # meaningful information (this guess could itself be the answer), not a
+    # redundant self-comparison to discard.
+    words = list(word_codec.get_words_list(mini_words_file, word_length=5, shift=ord('a') - 10))
+    target = words[0]
+
+    counter = vectorized_compendium.compute_word_counter_by_pattern_cross({target}, {target})
+
+    all_exact = (statics.StatusLetter.EXACT.value,) * 5
+    assert counter[all_exact][target] == 1
+
+
 def test_stream_pattern_compendium_matches_full_compendium(tmp_path: pathlib.Path, mini_words_file: pathlib.Path) -> None:
     # Regression test: `stream_pattern_compendium_to_cache` must produce the
     # exact same `word_counter_by_pattern` tally and cache contents as the

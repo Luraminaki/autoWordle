@@ -9,6 +9,7 @@ multiprocessing) from the pattern/pool logic here.
 @rules: https://en.wikipedia.org/wiki/Wordle
 """
 
+import dataclasses
 import itertools
 import math
 
@@ -18,7 +19,19 @@ type Tord = tuple[int, ...]
 type PatternCompendium = dict[Tord, set[tuple[Tord, Tord]]]
 type WordCounterByPattern = dict[Tord, dict[Tord, int]]
 type WordsInformation = list[tuple[Tord, float]]
-type LetterExtractor = dict[str, dict[int, int]]
+
+
+@dataclasses.dataclass
+class LetterExtractor:
+    """Known-included/excluded letters accumulated across a session's guesses.
+
+    `incl`/`excl` map a shifted letter ordinal to a count (occurrences seen
+    included, or `1` for excluded - excluded letters are never counted, just
+    flagged).
+    """
+
+    incl: dict[int, int] = dataclasses.field(default_factory=dict)
+    excl: dict[int, int] = dataclasses.field(default_factory=dict)
 
 
 def compute_pattern(guess: Tord, word: Tord) -> Tord:
@@ -81,20 +94,20 @@ def build_letter_extractor(guess: Tord, pattern: Tord) -> LetterExtractor:
         pattern: Resulting pattern for `guess`.
 
     Returns:
-        LetterExtractor: `{"incl": {letter: count}, "excl": {letter: 1}}`.
+        LetterExtractor: Freshly built from this one guess/pattern.
     """
-    extractor: LetterExtractor = {'incl': {}, 'excl': {}}
+    extractor = LetterExtractor()
 
     for pos, letter in enumerate(guess):
         if pattern[pos] != statics.StatusLetter.MISS.value:
-            if letter not in extractor['incl']:
-                extractor['incl'][letter] = 1
+            if letter not in extractor.incl:
+                extractor.incl[letter] = 1
                 continue
 
-            extractor['incl'][letter] = extractor['incl'][letter] + 1
+            extractor.incl[letter] = extractor.incl[letter] + 1
             continue
 
-        extractor['excl'][letter] = 1
+        extractor.excl[letter] = 1
 
     return extractor
 
@@ -109,14 +122,14 @@ def update_letter_extractor(old_ext: LetterExtractor, new_ext: LetterExtractor) 
     Returns:
         LetterExtractor: `old_ext`, updated in place.
     """
-    for letter in new_ext['incl']:
-        if letter not in old_ext['incl']:
-            old_ext['incl'][letter] = new_ext['incl'][letter]
+    for letter in new_ext.incl:
+        if letter not in old_ext.incl:
+            old_ext.incl[letter] = new_ext.incl[letter]
             continue
 
-        old_ext['incl'][letter] = old_ext['incl'][letter] + new_ext['incl'][letter]
+        old_ext.incl[letter] = old_ext.incl[letter] + new_ext.incl[letter]
 
-    old_ext['excl'].update(new_ext['excl'])
+    old_ext.excl.update(new_ext.excl)
 
     return old_ext
 
@@ -167,18 +180,18 @@ def build_suggestion(pool_words_information: WordsInformation,
     """
     known_letters: set[int] = set()
 
-    for letter in letter_extractor['incl']:
+    for letter in letter_extractor.incl:
         # If the letter can have a dupe (according to the pool_words),
         # but we don't know for sure (because not tested),
         # then we don't add it in the known_letters (and should test it if possible)
-        if pool_letters_dupes.get(letter, 0) != 0 and pool_letters_dupes.get(letter, 0) > letter_extractor['incl'].get(letter, 0):
+        if pool_letters_dupes.get(letter, 0) != 0 and pool_letters_dupes.get(letter, 0) > letter_extractor.incl.get(letter, 0):
             continue
         known_letters.add(letter)
 
     # By design, if the letter extracted is in the exclusion list, but also in the inclusion list,
     # then it means that we know for sure how many time the letter is in the word to guess,
-    # and we should have pool_letters_dupes.get(letter, 0) == letter_extractor["incl"].get(letter, 0)
-    for letter in letter_extractor['excl']:
+    # and we should have pool_letters_dupes.get(letter, 0) == letter_extractor.incl.get(letter, 0)
+    for letter in letter_extractor.excl:
         known_letters.add(letter)
 
     unknown_letters = pool_letters.difference(known_letters)

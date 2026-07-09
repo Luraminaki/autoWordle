@@ -18,6 +18,7 @@ is not a hot path the way `compendium_cache` is.
 """
 
 import _thread
+import dataclasses
 import json
 import logging
 import pathlib
@@ -26,7 +27,7 @@ import time
 from threading import Lock
 
 from autoWordle.app import models, schemas
-from autoWordle.modules import helpers, word_codec, wordle
+from autoWordle.modules import computing, helpers, word_codec, wordle
 
 logger = logging.getLogger(__name__)
 
@@ -104,7 +105,7 @@ class SessionStore:
             meta.max_tries, meta.current_tries, json.dumps(meta.guesses), json.dumps(meta.patterns),
             meta.created_timestamp, meta.last_active_timestamp,
             word_codec.tord_to_int(game.word), json.dumps([word_codec.tord_to_int(word) for word in game.pool_words]),
-            game.information, json.dumps(game.letter_extractor),
+            game.information, json.dumps(dataclasses.asdict(game.letter_extractor)),
         )
 
         with self.lock, self.db:
@@ -161,9 +162,10 @@ class SessionStore:
         game.information = record['information']
         # JSON object keys are always strings; `letter_extractor`'s inner
         # dicts are keyed by shifted-ordinal ints, so they need converting back.
-        raw_extractor = json.loads(record['letter_extractor'])
-        game.letter_extractor = {kind: {int(letter): count for letter, count in counts.items()}
-                                for kind, counts in raw_extractor.items()}
+        raw_extractor: dict[str, dict[int, int]] = json.loads(record['letter_extractor'])
+        game.letter_extractor = computing.LetterExtractor(
+            incl={int(letter): count for letter, count in raw_extractor['incl'].items()},
+            excl={int(letter): count for letter, count in raw_extractor['excl'].items()})
 
         return models.GameSession(meta=meta, game=game)
 

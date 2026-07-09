@@ -6,6 +6,8 @@ import json
 
 from fastapi.testclient import TestClient
 
+from autoWordle.modules import computing, statics
+
 #===================================================================================================
 
 
@@ -46,6 +48,41 @@ def test_create_game_session_rejects_unknown_session_on_submit(client: TestClien
     response = client.post('/api/app/submit_guess', json={'session_uuid': 'does-not-exist', 'word': 'crane'})
     assert response.status_code == 200
     assert response.json()['status'] == 'ERROR'
+
+
+def test_get_guess_stats_solve_mode_reports_best_guess(client: TestClient) -> None:
+    trigger = client.post('/api/app/precompute', json={'lang': 'mini', 'word_length': 5})
+    assert trigger.json()['job_status'] in ('running', 'done')
+
+    create = client.post('/api/app/create_game_session',
+                         json={'lang': 'mini', 'word_length': 5, 'max_tries': 6, 'game_mode': 'GAME_MODE_SOLVE'})
+    assert create.json()['status'] == 'SUCCESS'
+    session_uuid = create.json()['session_uuid']
+
+    # A real, guaranteed-non-empty-pool pattern: what "crane" actually
+    # produces against another real mini.txt word (arbitrary hand-picked
+    # emoji, unlike here, can correspond to no word at all and empty the pool).
+    shift = ord('a') - 10
+    guess = tuple(ord(letter) - shift for letter in 'crane')
+    target = tuple(ord(letter) - shift for letter in 'table')
+    pattern = statics.pattern_to_emoji(computing.compute_pattern(guess=guess, word=target))
+
+    stats = client.post('/api/app/get_guess_stats',
+                        json={'session_uuid': session_uuid, 'word': 'crane', 'pattern': pattern})
+    body = stats.json()
+
+    assert stats.status_code == 200
+    assert body['status'] == 'SUCCESS'
+    guess_stats = body['guess_stats']
+
+    assert guess_stats['best_guess'] is not None
+    assert len(guess_stats['best_guess']) == 1  # a single {word: entropy} entry
+    best_word = next(iter(guess_stats['best_guess']))
+    assert len(best_word) == 5
+    # The reported best guess must be the top of pool_words/elimination_suggestions
+    # combined - at minimum, its entropy should be >= every pool candidate's.
+    best_entropy = guess_stats['best_guess'][best_word]
+    assert all(best_entropy >= entropy for pool_word in guess_stats['pool_words'] for entropy in pool_word.values())
 
 
 def test_create_game_session_solve_mode_fails_without_exhaustive_data(client: TestClient) -> None:
