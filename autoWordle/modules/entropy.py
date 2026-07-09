@@ -9,38 +9,30 @@ multiprocessing machinery needed to compute it fast over large word pools.
 @rules: https://en.wikipedia.org/wiki/Wordle
 """
 
-from collections import Counter
 from concurrent.futures import ProcessPoolExecutor
 from multiprocessing import cpu_count
 
-from autoWordle.modules.computing import PatternCompendium, Tord, WordCounterByPattern, WordsInformation, safe_log2
+from autoWordle.modules.computing import Tord, WordCounterByPattern, WordsInformation, safe_log2
 
-
-def compute_word_counter_by_pattern(pattern_compendium: PatternCompendium) -> WordCounterByPattern:
-    """Count, per pattern, how many times each guess produces it.
-
-    Args:
-        pattern_compendium: Pattern -> set of `(guess, word)` pairs.
-
-    Returns:
-        WordCounterByPattern: Pattern -> {guess: occurrence count}.
-    """
-    word_counter_by_pattern: WordCounterByPattern = {}
-
-    for pattern, compendium in pattern_compendium.items():
-        pattern_words = [guess for guess, _ in compendium]
-        word_counter_by_pattern[pattern] = dict(Counter(pattern_words))
-
-    return word_counter_by_pattern
+# Below this many candidate guesses, computing entropy serially (a plain loop
+# in the current process) beats spinning up a ProcessPoolExecutor - benchmarked
+# on real word-list data: process fork/IPC overhead is a near-fixed ~7-15ms
+# regardless of pool size, while the actual per-word computation is
+# sub-millisecond up to a few hundred words. Parallelism only pays off once
+# the pool is close to a real dictionary's full size (confirmed ~24% faster
+# at 2315 words on the bundled wordle.txt, but ~1.4-4x *slower* at 500-1500) -
+# i.e. essentially only the one-time full-list precompute and a game's very
+# first guess, not the narrowed pools every later guess in a game works with.
+_SERIAL_THRESHOLD = 2000
 
 
 def compute_word_entropy(word: Tord, word_counter_by_pattern: WordCounterByPattern, nbr_words: int) -> float:
     """Compute the Shannon entropy (in bits) of guessing `word` against a pool.
 
     Args:
-        word: Candidate guess.
-        word_counter_by_pattern: Pattern -> {guess: occurrence count}.
-        nbr_words: Total number of words in the pool `word_counter_by_pattern` was built from.
+        word (Tord): Candidate guess.
+        word_counter_by_pattern (WordCounterByPattern): Pattern -> {guess: occurrence count}.
+        nbr_words (int): Total number of words in the pool `word_counter_by_pattern` was built from.
 
     Returns:
         float: Expected information gain, in bits.
@@ -66,8 +58,8 @@ def _entropy_worker_init(word_counter_by_pattern: WordCounterByPattern, nbr_word
     """Initialize a `ProcessPoolExecutor` worker with its (large, read-only) shared state.
 
     Args:
-        word_counter_by_pattern: Pattern -> {guess: occurrence count}.
-        nbr_words: Total number of words in the pool being ranked.
+        word_counter_by_pattern (WordCounterByPattern): Pattern -> {guess: occurrence count}.
+        nbr_words (int): Total number of words in the pool being ranked.
     """
     global _worker_word_counter_by_pattern, _worker_nbr_words
     _worker_word_counter_by_pattern = word_counter_by_pattern
@@ -78,7 +70,7 @@ def _entropy_worker(word: Tord) -> tuple[Tord, float]:
     """Compute one word's entropy against this worker's shared state.
 
     Args:
-        word: Candidate guess.
+        word (Tord): Candidate guess.
 
     Returns:
         tuple[Tord, float]: `(word, entropy)`.
@@ -86,19 +78,37 @@ def _entropy_worker(word: Tord) -> tuple[Tord, float]:
     return word, compute_word_entropy(word, _worker_word_counter_by_pattern, _worker_nbr_words)
 
 
-def rank_words_by_entropy(pool_words: set[Tord], word_counter_by_pattern: WordCounterByPattern,
-                         threads: int = 0, nbr_words: int | None = None) -> WordsInformation:
-    """Rank every word in a pool by its entropy against a target pool, in parallel.
+def _rank_words_by_entropy_serial(pool_words: set[Tord], word_counter_by_pattern: WordCounterByPattern,
+                                  nbr_words: int) -> WordsInformation:
+    """Rank every word in a pool by its entropy, in the current process - no worker pool.
 
     Args:
-        pool_words: Candidate words to rank as guesses.
-        word_counter_by_pattern: Pre-built pattern -> {guess: occurrence count}.
+        pool_words (set[Tord]): Candidate words to rank as guesses.
+        word_counter_by_pattern (WordCounterByPattern): Pre-built pattern -> {guess: occurrence count}.
+        nbr_words (int): Size of the target pool the entropy probabilities are computed against.
+
+    Returns:
+        WordsInformation: `(word, entropy)` pairs sorted by entropy, descending.
+    """
+    results = [(word, compute_word_entropy(word, word_counter_by_pattern, nbr_words)) for word in pool_words]
+    return sorted(results, key=lambda x: x[1], reverse=True)
+
+
+def rank_words_by_entropy(pool_words: set[Tord], word_counter_by_pattern: WordCounterByPattern,
+                          threads: int = 0, nbr_words: int | None = None) -> WordsInformation:
+    """Rank every word in a pool by its entropy against a target pool.
+
+    Args:
+        pool_words (set[Tord]): Candidate words to rank as guesses.
+        word_counter_by_pattern (WordCounterByPattern): Pre-built pattern -> {guess: occurrence count}.
             Callers that already have this (e.g. `helpers`'s streaming
             precomputation, which builds it directly without ever
             materializing a full `PatternCompendium`) should call this
-            directly instead of `compute_words_information`.
-        threads: Worker process count. `<= 0` or greater than the CPU count uses all CPUs.
-        nbr_words: Size of the *target* pool the entropy probabilities are
+            directly instead of `legacy_compendium.compute_words_information`.
+        threads (int): Worker process count for pools at/above `_SERIAL_THRESHOLD`
+            (ignored below it, see that constant). `<= 0` or greater than
+            the CPU count uses all CPUs.
+        nbr_words (int | None): Size of the *target* pool the entropy probabilities are
             computed against. Defaults to `len(pool_words)`, correct when
             `pool_words` is both the guesses being ranked and the possible
             targets (every caller before the full-dictionary-vs-narrowed-pool
@@ -108,11 +118,14 @@ def rank_words_by_entropy(pool_words: set[Tord], word_counter_by_pattern: WordCo
     Returns:
         WordsInformation: `(word, entropy)` pairs sorted by entropy, descending.
     """
-    if not 0 < threads <= cpu_count():
-        threads = cpu_count()
-
     if nbr_words is None:
         nbr_words = len(pool_words)
+
+    if len(pool_words) < _SERIAL_THRESHOLD:
+        return _rank_words_by_entropy_serial(pool_words, word_counter_by_pattern, nbr_words)
+
+    if not 0 < threads <= cpu_count():
+        threads = cpu_count()
 
     chunksize = max(1, len(pool_words) // (threads * 4) or 1)
 
@@ -121,23 +134,3 @@ def rank_words_by_entropy(pool_words: set[Tord], word_counter_by_pattern: WordCo
         results = list(executor.map(_entropy_worker, pool_words, chunksize=chunksize))
 
     return sorted(results, key=lambda x: x[1], reverse=True)
-
-
-def compute_words_information(pool_words: set[Tord], pattern_compendium: PatternCompendium, threads: int = 0) -> WordsInformation:
-    """Rank every word in a pool by its entropy against that pool, in parallel.
-
-    Args:
-        pool_words: Candidate words to rank.
-        pattern_compendium: Pre-built pattern compendium for `pool_words`. Only
-            used to derive `word_counter_by_pattern` - for a pool small enough
-            to hold the full compendium in memory (e.g. `wordle.Wordle`'s
-            per-guess narrowing, where the pool has already shrunk). For the
-            full word list, use `helpers`'s streaming precomputation and
-            `rank_words_by_entropy` directly instead.
-        threads: Worker process count. `<= 0` or greater than the CPU count uses all CPUs.
-
-    Returns:
-        WordsInformation: `(word, entropy)` pairs sorted by entropy, descending.
-    """
-    word_counter_by_pattern = compute_word_counter_by_pattern(pattern_compendium)
-    return rank_words_by_entropy(pool_words, word_counter_by_pattern, threads)

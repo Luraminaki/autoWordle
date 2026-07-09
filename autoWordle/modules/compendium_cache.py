@@ -43,10 +43,10 @@ class CacheDB:
         """Open (creating if needed) the cache database.
 
         Args:
-            db_file_path: Path to the SQLite file.
-            patterns: Pattern ints to create tables for. Pass none when
+            db_file_path (str | pathlib.Path): Path to the SQLite file.
+            patterns (Iterable[int]): Pattern ints to create tables for. Pass none when
                 opening an already-built cache (its tables already exist).
-            build_mode: When `True`, trade durability for raw insert speed
+            build_mode (bool): When `True`, trade durability for raw insert speed
                 (`synchronous=OFF`) for a one-time bulk build. When `False`
                 (default), use `synchronous=NORMAL`, appropriate for a
                 long-lived connection serving reads during gameplay.
@@ -86,17 +86,17 @@ class CacheDB:
 
             with self.db:
                 for pattern in patterns:
-                    _ = self.db.execute(f'CREATE TABLE IF NOT EXISTS "{pattern}" (guess INTEGER NOT NULL, word INTEGER NOT NULL)')
+                    _ = self.db.execute(f'CREATE TABLE IF NOT EXISTS "{int(pattern)}" (guess INTEGER NOT NULL, word INTEGER NOT NULL)')
 
 
     def add_entries(self, pattern: int, guess: list[int], word: list[int]) -> bool:
         """Insert every `(guess, word)` pair for a given pattern.
 
         Args:
-            pattern: Pattern these pairs produce, packed as an int; must
+            pattern (int): Pattern these pairs produce, packed as an int; must
                 already have a table (see `patterns` in `__init__`).
-            guess: Guess words, packed as ints, aligned with `word`.
-            word: Target words, packed as ints, aligned with `guess`.
+            guess (list[int]): Guess words, packed as ints, aligned with `word`.
+            word (list[int]): Target words, packed as ints, aligned with `guess`.
 
         Returns:
             bool: `True` on success.
@@ -107,7 +107,7 @@ class CacheDB:
 
         try:
             with self.lock, self.db:
-                _ = self.db.executemany(f'INSERT INTO "{pattern}" (guess, word) VALUES (?, ?)', list(zip(guess, word, strict=True)))
+                _ = self.db.executemany(f'INSERT INTO "{int(pattern)}" (guess, word) VALUES (?, ?)', list(zip(guess, word, strict=True)))
 
         except Exception:
             logger.exception("Failed to INSERT entries for pattern %s", pattern)
@@ -126,7 +126,7 @@ class CacheDB:
         streaming compendium builder) should use this instead.
 
         Args:
-            entries: Pattern (packed int) -> `(guesses, words)`, aligned
+            entries (dict[int, tuple[list[int], list[int]]]): Pattern (packed int) -> `(guesses, words)`, aligned
                 lists. Every pattern must already have a table (see
                 `patterns` in `__init__`).
 
@@ -141,7 +141,7 @@ class CacheDB:
                         logger.warning("Refusing to INSERT mismatched/empty entries for pattern %s", pattern)
                         continue
 
-                    _ = self.db.executemany(f'INSERT INTO "{pattern}" (guess, word) VALUES (?, ?)', list(zip(guess, word, strict=True)))
+                    _ = self.db.executemany(f'INSERT INTO "{int(pattern)}" (guess, word) VALUES (?, ?)', list(zip(guess, word, strict=True)))
 
         except Exception:
             logger.exception("Failed to INSERT batched entries")
@@ -154,7 +154,7 @@ class CacheDB:
         """Fetch every `(guess, word)` pair recorded for a given pattern.
 
         Args:
-            pattern: Pattern to look up, packed as an int.
+            pattern (int): Pattern to look up, packed as an int.
 
         Returns:
             list[tuple[int, int]]: `(guess, word)` pairs for `pattern`, empty
@@ -162,7 +162,7 @@ class CacheDB:
         """
         try:
             with self.lock:
-                return list(self.db.execute(f'SELECT guess, word FROM "{pattern}"'))
+                return list(self.db.execute(f'SELECT guess, word FROM "{int(pattern)}"'))
 
         except sqlite3.OperationalError:
             # Expected/harmless: this pattern never occurred in the source
@@ -186,8 +186,8 @@ class CacheDB:
         cost of live per-guess pool narrowing before this method existed.
 
         Args:
-            pattern: Pattern to look up, packed as an int.
-            guess: Guess to filter by, packed as an int.
+            pattern (int): Pattern to look up, packed as an int.
+            guess (int): Guess to filter by, packed as an int.
 
         Returns:
             list[int]: Packed target-word ints, empty if that pattern has no
@@ -195,7 +195,7 @@ class CacheDB:
         """
         try:
             with self.lock:
-                return [row[0] for row in self.db.execute(f'SELECT word FROM "{pattern}" WHERE guess = ?', (guess,))]
+                return [row[0] for row in self.db.execute(f'SELECT word FROM "{int(pattern)}" WHERE guess = ?', (guess,))]
 
         except sqlite3.OperationalError:
             logger.debug("No table for pattern %s (never occurred in the source pool)", pattern)

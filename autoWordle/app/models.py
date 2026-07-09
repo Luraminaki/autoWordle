@@ -59,9 +59,9 @@ def init_app_sources(app_root: pathlib.Path | None = None, client: bool = False)
     objects), suitable for exposing to a frontend.
 
     Args:
-        app_root: Directory `config.json` and the configured data folder are
+        app_root (pathlib.Path | None): Directory `config.json` and the configured data folder are
             resolved relative to. Defaults to `paths.get_app_root()`.
-        client: When `True`, build the JSON-serializable client view instead.
+        client (bool): When `True`, build the JSON-serializable client view instead.
 
     Returns:
         schemas.AppSources | schemas.AppSourcesClientView: Assembled
@@ -100,15 +100,15 @@ def create_game_session(lang: str, word_length: int, lang_launcher: helpers.Lang
     """Create a new game session.
 
     Args:
-        lang: Language the session is played in - recorded on the session so
+        lang (str): Language the session is played in - recorded on the session so
             it can be rehydrated from storage later (see
             `app.session_store`), since the live `lang_launcher` itself isn't
             persisted.
-        word_length: Word length the session is played at.
-        lang_launcher: Loaded solver data for `lang`/`word_length`, or `None`
+        word_length (int): Word length the session is played at.
+        lang_launcher (helpers.LangLauncher | None): Loaded solver data for `lang`/`word_length`, or `None`
             if that combination isn't available.
-        game_mode: Requested game mode.
-        max_tries: Maximum number of guesses allowed.
+        game_mode (statics.GameMode): Requested game mode.
+        max_tries (int): Maximum number of guesses allowed.
 
     Returns:
         GameSession: The newly created session.
@@ -133,8 +133,8 @@ def create_game_session(lang: str, word_length: int, lang_launcher: helpers.Lang
     logger.info("Creating game_session %s", session_uuid)
 
     meta = schemas.GameSessionMeta(session_uuid=session_uuid, lang=lang, word_length=word_length,
-                                  game_mode=game_mode, max_tries=max_tries,
-                                  created_timestamp=now, last_active_timestamp=now)
+                                   game_mode=game_mode, max_tries=max_tries,
+                                   created_timestamp=now, last_active_timestamp=now)
 
     return GameSession(meta=meta, game=wordle.Wordle(lang_launcher))
 
@@ -143,9 +143,9 @@ def reset_game_session(session: GameSession, game_mode: statics.GameMode, max_tr
     """Reset a game session to a fresh state, keeping its `session_uuid`.
 
     Args:
-        session: Session to reset.
-        game_mode: New game mode.
-        max_tries: New maximum number of guesses allowed.
+        session (GameSession): Session to reset.
+        game_mode (statics.GameMode): New game mode.
+        max_tries (int): New maximum number of guesses allowed.
     """
     session.game.reset()
     session.meta.game_mode = game_mode
@@ -160,7 +160,7 @@ def get_game_session_stats(session: GameSession) -> schemas.GameSessionMeta:
     """Return a session's current metadata.
 
     Args:
-        session: Session to inspect.
+        session (GameSession): Session to inspect.
 
     Returns:
         schemas.GameSessionMeta: The session's metadata.
@@ -172,7 +172,7 @@ def get_word_to_guess(session: GameSession) -> str:
     """Reveal the word to guess for a session (solve/assisted modes).
 
     Args:
-        session: Session to inspect.
+        session (GameSession): Session to inspect.
 
     Returns:
         str: The word to guess.
@@ -189,9 +189,9 @@ def get_guess_stats(session: GameSession, word: str, pattern: str) -> schemas.Gu
     too would double it.
 
     Args:
-        session: Session to update.
-        word: Guessed word.
-        pattern: Emoji pattern resulting from the guess.
+        session (GameSession): Session to update.
+        word (str): Guessed word.
+        pattern (str): Emoji pattern resulting from the guess.
 
     Returns:
         schemas.GuessStats | None: Solver statistics, or `None` in
@@ -238,8 +238,8 @@ def submit_guess(session: GameSession, word: str) -> str | None:
     """Submit a guess against a session's hidden word.
 
     Args:
-        session: Session to update.
-        word: Guessed word.
+        session (GameSession): Session to update.
+        word (str): Guessed word.
 
     Returns:
         str | None: The resulting emoji pattern, or `None` if the session has
@@ -288,10 +288,10 @@ def request_precompute(app_sources: schemas.AppSources, job_store: precompute_st
     runs, since a queued request might sit for a while before that happens.
 
     Args:
-        app_sources: Assembled application sources.
-        job_store: Precompute job store.
-        lang: Language stem.
-        word_length: Word length to precompute.
+        app_sources (schemas.AppSources): Assembled application sources.
+        job_store (precompute_store.PrecomputeJobStore): Precompute job store.
+        lang (str): Language stem.
+        word_length (int): Word length to precompute.
 
     Returns:
         precompute_store.PrecomputeRequestResult: Current status/queue
@@ -316,12 +316,12 @@ def run_precompute_job(app_sources: schemas.AppSources, job_store: precompute_st
     this always runs in a thread-pool thread with no caller waiting on it.
 
     Args:
-        app_sources: Shared application sources, mutated in place once a
+        app_sources (schemas.AppSources): Shared application sources, mutated in place once a
             build completes - the freshly built `LangLauncher` replaces (or
             creates) `app_sources.langs[lang].pre_computed[str(word_length)]`.
-        job_store: Precompute job store.
-        lang: Language stem to build first.
-        word_length: Word length to build first.
+        job_store (precompute_store.PrecomputeJobStore): Precompute job store.
+        lang (str): Language stem to build first.
+        word_length (int): Word length to build first.
     """
     current: tuple[str, int] | None = (lang, word_length)
 
@@ -336,7 +336,7 @@ def run_precompute_job(app_sources: schemas.AppSources, job_store: precompute_st
                 job_store.update_progress(lang, word_length, fraction_done, eta_seconds)
 
             new_launcher = helpers.LangLauncher(lang_file, compute_best_opening=True, word_length=current_word_length,
-                                               progress_callback=progress_callback)
+                                                progress_callback=progress_callback)
 
             app_sources.langs[current_lang].pre_computed[str(current_word_length)] = schemas.PrecomputedEntry(
                 path=lang_file, length=current_word_length, lang_launcher=new_launcher)

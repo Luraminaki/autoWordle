@@ -39,8 +39,8 @@ class SessionStore:
         """Open (creating if needed) the session database.
 
         Args:
-            db_path: Path to the SQLite file.
-            app_sources: Assembled application sources, used to look up the
+            db_path (str | pathlib.Path): Path to the SQLite file.
+            app_sources (schemas.AppSources): Assembled application sources, used to look up the
                 live `LangLauncher` a stored session belongs to by
                 `lang`/`word_length` when rehydrating it.
         """
@@ -78,8 +78,8 @@ class SessionStore:
         """Look up the live `LangLauncher` a stored session belongs to.
 
         Args:
-            lang: Language stem (e.g. `"wordle"`).
-            word_length: Word length.
+            lang (str): Language stem (e.g. `"wordle"`).
+            word_length (int): Word length.
 
         Returns:
             helpers.LangLauncher | None: The launcher, or `None` if this
@@ -95,7 +95,7 @@ class SessionStore:
         """Persist a session, inserting or overwriting it by `session_uuid`.
 
         Args:
-            session: Session to persist.
+            session (models.GameSession): Session to persist.
         """
         game = session.game
         meta = session.meta
@@ -126,7 +126,7 @@ class SessionStore:
         """Load a session by `session_uuid`.
 
         Args:
-            session_uuid: Session to load.
+            session_uuid (str): Session to load.
 
         Returns:
             models.GameSession | None: The session, or `None` if it doesn't
@@ -145,7 +145,7 @@ class SessionStore:
         lang_launcher = self._lang_launcher(record['lang'], record['word_length'])
         if lang_launcher is None:
             logger.warning("Session %s refers to an unavailable language/word_length (%s/%d)",
-                          session_uuid, record['lang'], record['word_length'])
+                           session_uuid, record['lang'], record['word_length'])
             return None
 
         meta = schemas.GameSessionMeta(
@@ -158,7 +158,7 @@ class SessionStore:
         game = wordle.Wordle(lang_launcher)
         game.word = word_codec.tord_from_int(record['word'], record['word_length'])
         game.pool_words = {word_codec.tord_from_int(packed, record['word_length'])
-                          for packed in json.loads(record['pool_words'])}
+                           for packed in json.loads(record['pool_words'])}
         game.information = record['information']
         # JSON object keys are always strings; `letter_extractor`'s inner
         # dicts are keyed by shifted-ordinal ints, so they need converting back.
@@ -174,7 +174,7 @@ class SessionStore:
         """Delete a session by `session_uuid`. A no-op if it doesn't exist.
 
         Args:
-            session_uuid: Session to delete.
+            session_uuid (str): Session to delete.
         """
         with self.lock, self.db:
             _ = self.db.execute('DELETE FROM sessions WHERE session_uuid = ?', (session_uuid,))
@@ -194,7 +194,7 @@ class SessionStore:
         """Delete every session inactive for at least `ttl_seconds`.
 
         Args:
-            ttl_seconds: Inactivity threshold, in seconds.
+            ttl_seconds (int): Inactivity threshold, in seconds.
 
         Returns:
             int: Number of sessions deleted.

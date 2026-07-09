@@ -70,7 +70,7 @@ def pattern_to_emoji(pattern: tuple[int, ...]) -> str:
     """Convert a numeric guess pattern into its emoji representation.
 
     Args:
-        pattern: Sequence of `StatusLetter` values, one per letter.
+        pattern (tuple[int, ...]): Sequence of `StatusLetter` values, one per letter.
 
     Returns:
         str: Emoji string (e.g. `"🟩⬛🟨⬛⬛"`).
@@ -82,7 +82,7 @@ def emoji_to_pattern(pattern: str) -> str:
     """Convert an emoji guess pattern back into its digit-string representation.
 
     Args:
-        pattern: Emoji string (e.g. `"🟩⬛🟨⬛⬛"`).
+        pattern (str): Emoji string (e.g. `"🟩⬛🟨⬛⬛"`).
 
     Returns:
         str: Digit string (e.g. `"31211"`), one `StatusLetter` value per character.
@@ -94,7 +94,7 @@ def pattern_permutations(word_length: int = 5) -> set[tuple[int, ...]]:
     """Build every possible guess pattern for a given word length.
 
     Args:
-        word_length: Number of letters in the word.
+        word_length (int): Number of letters in the word.
 
     Returns:
         set[tuple[int, ...]]: All `3 ** word_length` possible patterns.

@@ -11,7 +11,7 @@ from autoWordle.modules import statics
 
 def test_pattern_to_emoji_known_values() -> None:
     pattern = (statics.StatusLetter.EXACT.value, statics.StatusLetter.MISS.value,
-              statics.StatusLetter.MISPLACED.value, statics.StatusLetter.MISS.value, statics.StatusLetter.MISS.value)
+               statics.StatusLetter.MISPLACED.value, statics.StatusLetter.MISS.value, statics.StatusLetter.MISS.value)
 
     assert statics.pattern_to_emoji(pattern) == '🟩⬛🟨⬛⬛'
 

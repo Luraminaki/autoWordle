@@ -7,6 +7,7 @@
 
 import asyncio
 import json
+import logging
 
 from fastapi import APIRouter, BackgroundTasks
 from fastapi.responses import StreamingResponse
@@ -15,7 +16,16 @@ from autoWordle.app import models, paths, precompute_store, session_store
 from autoWordle.modules import statics
 from autoWordle.webapp import api_schemas
 
+logger = logging.getLogger(__name__)
+
 route = APIRouter(prefix='/api/app', tags=['API'])
+
+# Client-facing message for any *unexpected* exception - the real exception
+# (type, message, args, which can include internal file paths or other
+# implementation detail) is logged server-side via `logger.exception` instead
+# of being handed to the caller, unlike the specific, safe-to-expose error
+# strings used elsewhere in this module (e.g. `'INVALID_WORD ...'`).
+_INTERNAL_ERROR = 'INTERNAL_ERROR'
 
 APP_SOURCES = models.init_app_sources()
 SESSION_STORE = session_store.SessionStore(paths.get_app_root() / APP_SOURCES.config.data_folder / 'sessions.sqlite', APP_SOURCES)
@@ -40,8 +50,9 @@ async def get_active_games() -> api_schemas.ActiveGamesResponse:
         _ = SESSION_STORE.delete_expired(APP_SOURCES.config.session_ttl_seconds)
         active_games = SESSION_STORE.count()
 
-    except Exception as err:
-        return api_schemas.ActiveGamesResponse(status=statics.StatusFunction.ERROR, error=repr(err))
+    except Exception:
+        logger.exception("Failed to get active games")
+        return api_schemas.ActiveGamesResponse(status=statics.StatusFunction.ERROR, error=_INTERNAL_ERROR)
 
     return api_schemas.ActiveGamesResponse(status=statics.StatusFunction.SUCCESS, active_games=active_games)
 
@@ -52,8 +63,9 @@ async def get_app_sources() -> api_schemas.AppSourcesResponse:
     try:
         client_sources = models.init_app_sources(client=True)
 
-    except Exception as err:
-        return api_schemas.AppSourcesResponse(status=statics.StatusFunction.ERROR, error=repr(err))
+    except Exception:
+        logger.exception("Failed to get app sources")
+        return api_schemas.AppSourcesResponse(status=statics.StatusFunction.ERROR, error=_INTERNAL_ERROR)
 
     return api_schemas.AppSourcesResponse(status=statics.StatusFunction.SUCCESS, app_sources=client_sources)
 
@@ -73,8 +85,9 @@ async def create_game_session(request: api_schemas.CreateGameSessionRequest) -> 
         session = models.create_game_session(lang, request.word_length, lang_launcher, request.game_mode, request.max_tries)
         SESSION_STORE.save(session)
 
-    except Exception as err:
-        return api_schemas.CreateGameSessionResponse(status=statics.StatusFunction.ERROR, error=repr(err))
+    except Exception:
+        logger.exception("Failed to create game session")
+        return api_schemas.CreateGameSessionResponse(status=statics.StatusFunction.ERROR, error=_INTERNAL_ERROR)
 
     return api_schemas.CreateGameSessionResponse(status=statics.StatusFunction.SUCCESS, session_uuid=session.meta.session_uuid)
 
@@ -90,8 +103,9 @@ async def reset_game_session(request: api_schemas.ResetGameSessionRequest) -> ap
         models.reset_game_session(session, request.game_mode, request.max_tries)
         SESSION_STORE.save(session)
 
-    except Exception as err:
-        return api_schemas.StatusResponse(status=statics.StatusFunction.ERROR, error=repr(err))
+    except Exception:
+        logger.exception("Failed to reset game session")
+        return api_schemas.StatusResponse(status=statics.StatusFunction.ERROR, error=_INTERNAL_ERROR)
 
     return api_schemas.StatusResponse(status=statics.StatusFunction.SUCCESS)
 
@@ -102,8 +116,9 @@ async def delete_game_session(request: api_schemas.DeleteGameSessionRequest) -> 
     try:
         SESSION_STORE.delete(request.session_uuid)
 
-    except Exception as err:
-        return api_schemas.StatusResponse(status=statics.StatusFunction.ERROR, error=repr(err))
+    except Exception:
+        logger.exception("Failed to delete game session")
+        return api_schemas.StatusResponse(status=statics.StatusFunction.ERROR, error=_INTERNAL_ERROR)
 
     return api_schemas.StatusResponse(status=statics.StatusFunction.SUCCESS)
 
@@ -118,8 +133,9 @@ async def get_game_session_stats(request: api_schemas.GameSessionStatsRequest) -
 
         stats = models.get_game_session_stats(session)
 
-    except Exception as err:
-        return api_schemas.GameSessionStatsResponse(status=statics.StatusFunction.ERROR, error=repr(err))
+    except Exception:
+        logger.exception("Failed to get game session stats")
+        return api_schemas.GameSessionStatsResponse(status=statics.StatusFunction.ERROR, error=_INTERNAL_ERROR)
 
     return api_schemas.GameSessionStatsResponse(status=statics.StatusFunction.SUCCESS, session_stats=stats)
 
@@ -134,8 +150,9 @@ async def get_word_to_guess(request: api_schemas.WordToGuessRequest) -> api_sche
 
         word = models.get_word_to_guess(session)
 
-    except Exception as err:
-        return api_schemas.WordToGuessResponse(status=statics.StatusFunction.ERROR, error=repr(err))
+    except Exception:
+        logger.exception("Failed to get word to guess")
+        return api_schemas.WordToGuessResponse(status=statics.StatusFunction.ERROR, error=_INTERNAL_ERROR)
 
     return api_schemas.WordToGuessResponse(status=statics.StatusFunction.SUCCESS, word=word)
 
@@ -151,8 +168,9 @@ async def get_guess_stats(request: api_schemas.GuessStatsRequest) -> api_schemas
         stats = models.get_guess_stats(session, request.word, request.pattern)
         SESSION_STORE.save(session)
 
-    except Exception as err:
-        return api_schemas.GuessStatsResponse(status=statics.StatusFunction.ERROR, error=repr(err))
+    except Exception:
+        logger.exception("Failed to get guess stats")
+        return api_schemas.GuessStatsResponse(status=statics.StatusFunction.ERROR, error=_INTERNAL_ERROR)
 
     return api_schemas.GuessStatsResponse(status=statics.StatusFunction.SUCCESS, guess_stats=stats)
 
@@ -170,8 +188,9 @@ async def submit_guess(request: api_schemas.SubmitGuessRequest) -> api_schemas.S
 
         SESSION_STORE.save(session)
 
-    except Exception as err:
-        return api_schemas.SubmitGuessResponse(status=statics.StatusFunction.ERROR, error=repr(err))
+    except Exception:
+        logger.exception("Failed to submit guess")
+        return api_schemas.SubmitGuessResponse(status=statics.StatusFunction.ERROR, error=_INTERNAL_ERROR)
 
     return api_schemas.SubmitGuessResponse(status=statics.StatusFunction.SUCCESS, pattern=pattern)
 
@@ -196,8 +215,9 @@ async def precompute(request: api_schemas.PrecomputeRequest, background_tasks: B
     except models.PrecomputeNotAllowedError as err:
         return api_schemas.PrecomputeResponse(status=statics.StatusFunction.ERROR, error=str(err))
 
-    except Exception as err:
-        return api_schemas.PrecomputeResponse(status=statics.StatusFunction.ERROR, error=repr(err))
+    except Exception:
+        logger.exception("Failed to request precompute")
+        return api_schemas.PrecomputeResponse(status=statics.StatusFunction.ERROR, error=_INTERNAL_ERROR)
 
     return api_schemas.PrecomputeResponse(status=statics.StatusFunction.SUCCESS,
                                           job_status=result.status, queue_position=result.position)
@@ -222,7 +242,7 @@ async def precompute_progress(lang: str, word_length: int) -> StreamingResponse:
                 return
 
             payload = {'status': job.status.value, 'fraction_done': job.fraction_done,
-                      'eta_seconds': job.eta_seconds, 'position': job.position, 'error': job.error}
+                       'eta_seconds': job.eta_seconds, 'position': job.position, 'error': job.error}
             yield f"data: {json.dumps(payload)}\n\n"
 
             if job.status in (statics.PrecomputeStatus.DONE, statics.PrecomputeStatus.FAILED):

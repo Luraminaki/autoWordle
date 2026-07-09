@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 
 
 def init_game(language_launcher: helpers.LangLauncher, word: tuple[int, ...],
-             best_opening: bool, cptr_games: int) -> tuple[tuple[int, ...], tuple[int, ...], wordle.Wordle]:
+              best_opening: bool, cptr_games: int) -> tuple[tuple[int, ...], tuple[int, ...], wordle.Wordle]:
     game = wordle.Wordle(language_launcher)
     game.word = word
 
@@ -48,11 +48,13 @@ def run_test(language_launcher: helpers.LangLauncher, word: tuple[int, ...],
         logger.info('-------------------------------------------------------------')
         guess_str = ''.join(chr(ord_letter + game.shift) for ord_letter in guess)
         logger.info("Attempt n° %d -- Trying word: %s -- %d/%d",
-                   cptr_tries + 1, guess_str, len(game.pool_words), len(language_launcher.words))
+                    cptr_tries + 1, guess_str, len(game.pool_words), len(language_launcher.words))
 
-        if ((pattern := game.submit_guess(guess)) == win_p
+        if (
+            (pattern := game.submit_guess(guess)) == win_p
             or not pattern
-            or pattern is None):
+            or pattern is None
+        ):
             break
 
         if game.submit_guess_and_pattern(guess, pattern) is None:
@@ -83,7 +85,7 @@ def show_stats(nb_guesses: list[int], max_tries: int, cptr_games: int, tac: floa
             continue
 
     logger.info("END -- Played %d games in %s second(s) (%s second(s) / game)",
-               cptr_games, round(tac, 2), round(round(tac, 2) / cptr_games, 2))
+                cptr_games, round(tac, 2), round(round(tac, 2) / cptr_games, 2))
     logger.info("END -- Average tries is %s", round(sum(nb_guesses) / cptr_games, 2))
     logger.info("END -- Median tries is %s", median_guesses)
     logger.info("END -- (Min, Max) tries are (%d, %d)", min(nb_guesses), max(nb_guesses))

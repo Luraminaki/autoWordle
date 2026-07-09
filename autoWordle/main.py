@@ -39,10 +39,13 @@ def create_app() -> FastAPI:
 
     fastapi_app = FastAPI(title='autoWordle', description='Wordle / Motus solver game web app.')
 
+    # No `allow_credentials=True`: this API has no cookie-based auth, and
+    # combining it with a wildcard origin is invalid per the CORS spec anyway
+    # (browsers/Starlette work around it by echoing back the request's own
+    # Origin, which would grant every origin credentialed access).
     fastapi_app.add_middleware(
         CORSMiddleware,
         allow_origins=['*'],
-        allow_credentials=True,
         allow_methods=['*'],
         allow_headers=['*'],
     )

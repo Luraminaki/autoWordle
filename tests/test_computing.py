@@ -50,14 +50,6 @@ def test_compute_pattern_misplaced_survives_later_exact_match_on_same_letter() -
     assert computing.compute_pattern(guess=guess, word=word) == (MISS, MISS, EXACT, MISPLACED, EXACT)
 
 
-def test_build_pattern_compendium_pair_count() -> None:
-    words = {(1, 2, 3, 4, 5), (6, 7, 8, 9, 10), (11, 12, 13, 14, 15), (16, 17, 18, 19, 20), (21, 22, 23, 24, 25)}
-    compendium = computing.build_pattern_compendium(words)
-
-    total_pairs = sum(len(combinations) for combinations in compendium.values())
-    assert total_pairs == len(words) * (len(words) - 1)
-
-
 def test_build_letter_extractor_and_update() -> None:
     guess = (1, 2, 3, 4, 5)
     pattern = (EXACT, MISS, MISPLACED, MISS, EXACT)

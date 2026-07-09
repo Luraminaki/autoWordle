@@ -24,9 +24,9 @@ def tord_from_int(txt: int, word_length: int, units: int = 100) -> Tord:
     """Unpack a base-`units`-encoded int back into a shifted-ordinal word tuple.
 
     Args:
-        txt: Packed integer, as produced by `tord_to_int`.
-        word_length: Number of letters to unpack.
-        units: Base used for packing (matches the base used in `tord_to_int`).
+        txt (int): Packed integer, as produced by `tord_to_int`.
+        word_length (int): Number of letters to unpack.
+        units (int): Base used for packing (matches the base used in `tord_to_int`).
 
     Returns:
         Tord: Decoded shifted-ordinal word.
@@ -44,8 +44,8 @@ def tord_to_int(tord: Tord, units: int = 100) -> int:
     """Pack a shifted-ordinal word tuple into a single base-`units` int.
 
     Args:
-        tord: Shifted-ordinal word.
-        units: Base to pack with (100 comfortably fits any single shifted ordinal digit-pair).
+        tord (Tord): Shifted-ordinal word.
+        units (int): Base to pack with (100 comfortably fits any single shifted ordinal digit-pair).
 
     Returns:
         int: Packed integer.
@@ -62,9 +62,9 @@ def get_words_list(path: pathlib.Path, word_length: int, shift: int) -> set[Tord
     """Load every `word_length`-letter word from a word list file.
 
     Args:
-        path: Newline-delimited word list file.
-        word_length: Word length to filter to.
-        shift: Ordinal shift applied when encoding letters.
+        path (pathlib.Path): Newline-delimited word list file.
+        word_length (int): Word length to filter to.
+        shift (int): Ordinal shift applied when encoding letters.
 
     Returns:
         set[Tord]: Distinct matching words, as shifted-ordinal tuples.
@@ -88,8 +88,8 @@ def get_data_paths(words_file: pathlib.Path, word_length: int) -> tuple[pathlib.
     """Derive this word list's precomputed sidecar file paths for a given word length.
 
     Args:
-        words_file: Source word list file.
-        word_length: Word length these sidecars are precomputed for.
+        words_file (pathlib.Path): Source word list file.
+        word_length (int): Word length these sidecars are precomputed for.
 
     Returns:
         tuple[pathlib.Path, pathlib.Path]: `(cache_file, words_information_file)`.
@@ -107,9 +107,9 @@ def save_words_information(path: pathlib.Path, words_information: WordsInformati
     """Persist an entropy ranking to a CSV sidecar file.
 
     Args:
-        path: Destination CSV file (overwritten if it exists).
-        words_information: Words ranked by entropy.
-        shift: Ordinal shift used to decode letters back to characters.
+        path (pathlib.Path): Destination CSV file (overwritten if it exists).
+        words_information (WordsInformation): Words ranked by entropy.
+        shift (int): Ordinal shift used to decode letters back to characters.
     """
     path.unlink(missing_ok=True)
 
@@ -124,8 +124,8 @@ def load_words_information(path: pathlib.Path, shift: int) -> WordsInformation:
     """Load a previously persisted entropy ranking from a CSV sidecar file.
 
     Args:
-        path: Source CSV file, as written by `save_words_information`.
-        shift: Ordinal shift used to encode letters.
+        path (pathlib.Path): Source CSV file, as written by `save_words_information`.
+        shift (int): Ordinal shift used to encode letters.
 
     Returns:
         WordsInformation: Words ranked by entropy, as persisted.

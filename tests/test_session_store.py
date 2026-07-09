@@ -49,7 +49,7 @@ def test_save_and_load_round_trip(tmp_path: pathlib.Path, mini_words_file: pathl
 
 
 def test_save_and_load_round_trip_preserves_populated_letter_extractor(tmp_path: pathlib.Path,
-                                                                        mini_words_file: pathlib.Path) -> None:
+                                                                       mini_words_file: pathlib.Path) -> None:
     # Regression test for the LetterExtractor dict -> dataclass conversion:
     # `test_save_and_load_round_trip` above only ever exercises an *empty*
     # extractor (GAME_MODE_PLAY's submit_guess never populates it) - this

@@ -35,10 +35,10 @@ def configure_logging(log_file_stem: str = 'autoWordle', level: int | str = logg
     just to log which function a message came from.
 
     Args:
-        log_file_stem: Stem for the rotating log file (`<stem>.log`, `.log.1`, ...).
-        level: Logging level for the root logger, as an int or a level name (e.g. `"INFO"`).
-        max_bytes: Size a log file may reach before it rotates.
-        backup_count: Number of rotated log files to keep.
+        log_file_stem (str): Stem for the rotating log file (`<stem>.log`, `.log.1`, ...).
+        level (int | str): Logging level for the root logger, as an int or a level name (e.g. `"INFO"`).
+        max_bytes (int): Size a log file may reach before it rotates.
+        backup_count (int): Number of rotated log files to keep.
     """
     reset_logging()
 
@@ -47,7 +47,7 @@ def configure_logging(log_file_stem: str = 'autoWordle', level: int | str = logg
         format='[%(asctime)s] [%(process)s] [%(name)s] [%(levelname)s]: %(funcName)s -- %(message)s',
         handlers=[
             RotatingFileHandler(f'{log_file_stem}.log', mode='a', maxBytes=max_bytes,
-                               backupCount=backup_count, encoding='utf-8'),
+                                backupCount=backup_count, encoding='utf-8'),
             logging.StreamHandler(),
         ],
     )

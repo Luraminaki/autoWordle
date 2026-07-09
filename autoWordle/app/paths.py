@@ -33,7 +33,7 @@ def load_json_config(path: pathlib.Path) -> dict:
     """Read and parse a JSON config file.
 
     Args:
-        path: Path to the JSON file.
+        path (pathlib.Path): Path to the JSON file.
 
     Returns:
         dict: Parsed JSON content.

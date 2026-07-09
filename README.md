@@ -111,7 +111,7 @@ Computing this is `O(n**2)` in the word count either way, but *how* it's
 built matters a lot for both memory and speed. `vectorized_compendium`
 streams every `(guess, word)` pair straight to the SQLite cache in bounded
 batches (never materializing the full pair set in memory at once, unlike
-`computing.build_pattern_compendium`), and computes each guess's pattern
+`legacy_compendium.build_pattern_compendium`), and computes each guess's pattern
 against the *entire* pool as a handful of vectorized numpy array operations
 rather than one Python-level function call per pair. Benchmarked against the
 straightforward full-compendium-in-memory approach: for the bundled

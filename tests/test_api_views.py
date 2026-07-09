@@ -96,7 +96,7 @@ def test_create_game_session_solve_mode_fails_without_exhaustive_data(client: Te
 def test_max_sessions_limit_is_enforced(client: TestClient) -> None:
     responses = [client.post('/api/app/create_game_session',
                              json={'lang': 'mini', 'word_length': 5, 'max_tries': 6, 'game_mode': 'GAME_MODE_PLAY'})
-                for _ in range(6)]  # MAX_SESSIONS is 5 in the test config
+                 for _ in range(6)]  # MAX_SESSIONS is 5 in the test config
 
     statuses = [r.json()['status'] for r in responses]
     assert statuses.count('SUCCESS') == 5
@@ -149,7 +149,7 @@ def test_precompute_builds_and_progress_reports_done(client: TestClient) -> None
     # The swap into the shared AppSources actually took effect - GAME_MODE_SOLVE
     # should now be allowed.
     solve_after = client.post('/api/app/create_game_session',
-                             json={'lang': 'mini', 'word_length': 5, 'max_tries': 6, 'game_mode': 'GAME_MODE_SOLVE'})
+                              json={'lang': 'mini', 'word_length': 5, 'max_tries': 6, 'game_mode': 'GAME_MODE_SOLVE'})
     assert solve_after.json()['status'] == 'SUCCESS'
 
 

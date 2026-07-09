@@ -88,8 +88,8 @@ def test_submit_guess_and_pattern_impossible_combo_empties_pool(tmp_path: pathli
     # patterns out of 3**5 = 243 possible ones.
     produced_patterns = {computing.compute_pattern(guess=guess, word=word) for word in launcher.words}
     impossible_pattern = next(tuple(int(status) for status in candidate)
-                             for candidate in statics.pattern_permutations(5)
-                             if tuple(int(status) for status in candidate) not in produced_patterns)
+                              for candidate in statics.pattern_permutations(5)
+                              if tuple(int(status) for status in candidate) not in produced_patterns)
 
     assert game.submit_guess_and_pattern(guess, impossible_pattern) is None
     assert game.pool_words == set()

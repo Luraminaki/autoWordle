@@ -2,7 +2,7 @@
 """Numpy-vectorized pattern-compendium building.
 
 Computes the same `O(n**2)` `(guess, word)` pairs as
-`computing.build_pattern_compendium`, but every guess's patterns against the
+`legacy_compendium.build_pattern_compendium`, but every guess's patterns against the
 full word pool are computed in a handful of vectorized array operations
 instead of one Python-level `computing.compute_pattern` call per pair - a
 large constant-factor speedup that grows with pool size (benchmarked: ~30%
@@ -51,7 +51,7 @@ _EXACT = int(statics.StatusLetter.EXACT)
 # Flush a pattern's buffered (guess, word) pairs to the cache once its buffer
 # reaches this size - bounds peak memory independent of word-list size,
 # instead of accumulating every pair for every pattern before writing any of
-# them out (what `computing.build_pattern_compendium` does).
+# them out (what `legacy_compendium.build_pattern_compendium` does).
 _STREAM_BATCH_SIZE = 200_000
 
 
@@ -64,8 +64,8 @@ def _compute_patterns_for_guess(guess_row: np.ndarray, words_arr: np.ndarray) ->
     of one Python-level call per word.
 
     Args:
-        guess_row: Shape `(word_length,)` int array, one guess's letters.
-        words_arr: Shape `(n, word_length)` int array, every candidate word's letters.
+        guess_row (np.ndarray): Shape `(word_length,)` int array, one guess's letters.
+        words_arr (np.ndarray): Shape `(n, word_length)` int array, every candidate word's letters.
 
     Returns:
         np.ndarray: Shape `(n,)` int array of packed pattern ints.
@@ -108,14 +108,14 @@ def compute_word_counter_by_pattern_cross(guesses: set[Tord], targets: set[Tord]
     ephemeral ranking input for one live decision, never written to a cache.
 
     A guess that happens to also be a member of `targets` is *not* excluded
-    (unlike `computing.build_pattern_compendium`'s self-pair skip): guessing
+    (unlike `legacy_compendium.build_pattern_compendium`'s self-pair skip): guessing
     a word that could itself be the answer legitimately produces the
     all-EXACT pattern, and that's meaningful information to keep, not a
     redundant self-comparison to discard.
 
     Args:
-        guesses: Candidate guesses to evaluate (e.g. the full word list).
-        targets: Possible remaining answers (e.g. the current narrowed pool).
+        guesses (set[Tord]): Candidate guesses to evaluate (e.g. the full word list).
+        targets (set[Tord]): Possible remaining answers (e.g. the current narrowed pool).
 
     Returns:
         WordCounterByPattern: Pattern -> {guess: occurrence count against `targets`}.
@@ -140,7 +140,7 @@ def stream_pattern_compendium_to_cache(pool_words: set[Tord], cache: compendium_
                                        progress_callback: Callable[[float, float], None] | None = None) -> WordCounterByPattern:
     """Cross-evaluate every ordered pair in `pool_words`, one guess at a time, vectorized.
 
-    Same `(guess, word)` pairs as `computing.build_pattern_compendium`, but
+    Same `(guess, word)` pairs as `legacy_compendium.build_pattern_compendium`, but
     each guess's patterns against the full pool are computed in one batch of
     array operations (see `_compute_patterns_for_guess`) instead of one
     Python-level `computing.compute_pattern` call per pair, and matches are
@@ -154,18 +154,18 @@ def stream_pattern_compendium_to_cache(pool_words: set[Tord], cache: compendium_
     extrapolation is accurate here, unlike most progress estimates.
 
     Args:
-        pool_words: Candidate words to cross-evaluate. Every letter must fall
+        pool_words (set[Tord]): Candidate words to cross-evaluate. Every letter must fall
             in the `word_codec` shift range `[10, 36)` - i.e. `pool_words`
             must come from `word_codec.get_words_list`/`tord_from_int`, not
             arbitrary int tuples - `_compute_patterns_for_guess` indexes a
             fixed-size 26-column array by `letter - 10` with no bounds check,
             so an out-of-range letter would silently corrupt results (wrap to
             an unrelated column) rather than fail loudly.
-        cache: Cache to write matches into; must already have a table for
+        cache (compendium_cache.CacheDB): Cache to write matches into; must already have a table for
             every possible pattern (see `statics.pattern_permutations`).
-        batch_size: Flush buffered pairs to `cache` once at least this many
+        batch_size (int): Flush buffered pairs to `cache` once at least this many
             are pending - bounds peak memory independent of word-list size.
-        progress_callback: If given, called with `(fraction_done, eta_seconds)`
+        progress_callback (Callable[[float, float], None] | None): If given, called with `(fraction_done, eta_seconds)`
             on the same cadence as the progress log line - e.g. to publish
             progress somewhere observable across processes (see
             `app.precompute_store`), rather than just the local log.
@@ -234,7 +234,7 @@ def stream_pattern_compendium_to_cache(pool_words: set[Tord], cache: compendium_
 
             if group_self_mask.any():
                 # Excludes the (guess, guess) self-pair, matching
-                # `computing.build_pattern_compendium`'s `word == guess` skip.
+                # `legacy_compendium.build_pattern_compendium`'s `word == guess` skip.
                 group_word_ints = group_word_ints[~group_self_mask]
 
             count = len(group_word_ints)

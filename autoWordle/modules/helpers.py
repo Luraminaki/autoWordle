@@ -23,19 +23,19 @@ class LangLauncher:
     """Loads a language's word list and (optionally) its precomputed solver data."""
 
     def __init__(self, words_path: str | pathlib.Path,
-                compute_best_opening: bool = False,
-                word_length: int = 5,
-                threads: int = 0,
-                progress_callback: Callable[[float, float], None] | None = None) -> None:
+                 compute_best_opening: bool = False,
+                 word_length: int = 5,
+                 threads: int = 0,
+                 progress_callback: Callable[[float, float], None] | None = None) -> None:
         """Load the word list and, if requested/available, exhaustive solver data.
 
         Args:
-            words_path: Path to a newline-delimited word list file.
-            compute_best_opening: Whether to compute (and persist) exhaustive
+            words_path (str | pathlib.Path): Path to a newline-delimited word list file.
+            compute_best_opening (bool): Whether to compute (and persist) exhaustive
                 entropy/pattern-cache data if it isn't already on disk.
-            word_length: Word length to filter the list to.
-            threads: Worker process count for entropy computation (0 = all CPUs).
-            progress_callback: If given and a build actually runs, called with
+            word_length (int): Word length to filter the list to.
+            threads (int): Worker process count for entropy computation (0 = all CPUs).
+            progress_callback (Callable[[float, float], None] | None): If given and a build actually runs, called with
                 `(fraction_done, eta_seconds)` periodically - see
                 `vectorized_compendium.stream_pattern_compendium_to_cache`.
 
@@ -82,8 +82,8 @@ class LangLauncher:
         all but a handful that didn't match `guess`.
 
         Args:
-            guess: Guess actually played.
-            pattern: Resulting pattern for `guess`.
+            guess (computing.Tord): Guess actually played.
+            pattern (computing.Tord): Resulting pattern for `guess`.
 
         Returns:
             set[Tord]: Matching target words, empty if no cache is loaded or none match.
@@ -95,7 +95,7 @@ class LangLauncher:
         pattern_int = word_codec.tord_to_int(pattern, 10)
 
         return {word_codec.tord_from_int(word, self.word_length)
-               for word in self.cache.get_words_for_guess(pattern_int, guess_int)}
+                for word in self.cache.get_words_for_guess(pattern_int, guess_int)}
 
 
     def _build_cache(self, path: pathlib.Path,
@@ -109,8 +109,8 @@ class LangLauncher:
         tables to create.
 
         Args:
-            path: SQLite cache file path (must not exist yet).
-            progress_callback: Forwarded to
+            path (pathlib.Path): SQLite cache file path (must not exist yet).
+            progress_callback (Callable[[float, float], None] | None): Forwarded to
                 `vectorized_compendium.stream_pattern_compendium_to_cache`.
 
         Returns:
@@ -138,9 +138,9 @@ class LangLauncher:
         """Load or compute this language's entropy ranking and pattern cache.
 
         Args:
-            compute_best_opening: Whether to compute (and persist) exhaustive
+            compute_best_opening (bool): Whether to compute (and persist) exhaustive
                 data if it isn't already on disk.
-            progress_callback: Forwarded to `_build_cache` if a build actually runs.
+            progress_callback (Callable[[float, float], None] | None): Forwarded to `_build_cache` if a build actually runs.
 
         Returns:
             computing.WordsInformation: Words ranked by entropy, descending
@@ -196,13 +196,13 @@ def init_lang_app_data(lang_files: list[pathlib.Path],
     multi-gigabyte for a large dictionary that was never meant to get it.
 
     Args:
-        lang_files: Plain word list files (one language each).
-        exhaustive_files: `*_info.csv` markers of completed exhaustive precomputation.
-        default_word_lengths: Word lengths to always build a `LangLauncher` for.
-        compute_best_opening: Whether to compute (and persist) exhaustive data
+        lang_files (list[pathlib.Path]): Plain word list files (one language each).
+        exhaustive_files (list[pathlib.Path]): `*_info.csv` markers of completed exhaustive precomputation.
+        default_word_lengths (list[int] | tuple[int, ...]): Word lengths to always build a `LangLauncher` for.
+        compute_best_opening (bool): Whether to compute (and persist) exhaustive data
             for language/length combinations that already have a marker but are
             missing their sidecar files.
-        client: When `True`, produce a JSON-serializable view (no live
+        client (bool): When `True`, produce a JSON-serializable view (no live
             `LangLauncher` instances) suitable for `schemas.LangSource.model_validate`.
 
     Returns:

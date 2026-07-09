@@ -72,7 +72,7 @@ class PrecomputeJobStore:
         """Open (creating if needed) the job database.
 
         Args:
-            db_path: Path to the SQLite file.
+            db_path (str | pathlib.Path): Path to the SQLite file.
         """
         self.db_path: str = str(db_path)
         self.lock: _thread.LockType = Lock()
@@ -144,8 +144,8 @@ class PrecomputeJobStore:
         """Request a build for `(lang, word_length)`, enqueuing or resuming as needed.
 
         Args:
-            lang: Language stem.
-            word_length: Word length.
+            lang (str): Language stem.
+            word_length (int): Word length.
 
         Returns:
             PrecomputeRequestResult: Current status/queue position, and
@@ -189,10 +189,10 @@ class PrecomputeJobStore:
         """Update a running job's progress/ETA - also refreshes its staleness heartbeat.
 
         Args:
-            lang: Language stem.
-            word_length: Word length.
-            fraction_done: Completion fraction, `0.0`-`1.0`.
-            eta_seconds: Estimated seconds remaining.
+            lang (str): Language stem.
+            word_length (int): Word length.
+            fraction_done (float): Completion fraction, `0.0`-`1.0`.
+            eta_seconds (float): Estimated seconds remaining.
         """
         with self.lock, self.db:
             _ = self.db.execute(
@@ -204,8 +204,8 @@ class PrecomputeJobStore:
         """Mark a job done, then claim the next queued job if any.
 
         Args:
-            lang: Language stem.
-            word_length: Word length.
+            lang (str): Language stem.
+            word_length (int): Word length.
 
         Returns:
             tuple[str, int] | None: The `(lang, word_length)` of the job the
@@ -222,9 +222,9 @@ class PrecomputeJobStore:
         """Mark a job failed, then claim the next queued job if any.
 
         Args:
-            lang: Language stem.
-            word_length: Word length.
-            error: Error description.
+            lang (str): Language stem.
+            word_length (int): Word length.
+            error (str): Error description.
 
         Returns:
             tuple[str, int] | None: The `(lang, word_length)` of the job the
@@ -241,8 +241,8 @@ class PrecomputeJobStore:
         """Look up a job's current status.
 
         Args:
-            lang: Language stem.
-            word_length: Word length.
+            lang (str): Language stem.
+            word_length (int): Word length.
 
         Returns:
             PrecomputeJobStatus | None: Current state, or `None` if no job

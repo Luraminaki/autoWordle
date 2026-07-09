@@ -10,7 +10,6 @@ multiprocessing) from the pattern/pool logic here.
 """
 
 import dataclasses
-import itertools
 import math
 
 from autoWordle.modules import statics
@@ -58,8 +57,8 @@ def compute_pattern(guess: Tord, word: Tord) -> Tord:
     disagreed between the two versions, always on a repeated-letter guess.
 
     Args:
-        guess: Guessed word, as shifted letter ordinals.
-        word: Target word, as shifted letter ordinals.
+        guess (Tord): Guessed word, as shifted letter ordinals.
+        word (Tord): Target word, as shifted letter ordinals.
 
     Returns:
         Tord: One `StatusLetter` value per letter of `guess`.
@@ -90,8 +89,8 @@ def build_letter_extractor(guess: Tord, pattern: Tord) -> LetterExtractor:
     """Extract known-included/excluded letters from one guess and its pattern.
 
     Args:
-        guess: Guessed word, as shifted letter ordinals.
-        pattern: Resulting pattern for `guess`.
+        guess (Tord): Guessed word, as shifted letter ordinals.
+        pattern (Tord): Resulting pattern for `guess`.
 
     Returns:
         LetterExtractor: Freshly built from this one guess/pattern.
@@ -116,8 +115,8 @@ def update_letter_extractor(old_ext: LetterExtractor, new_ext: LetterExtractor) 
     """Merge a newly extracted letter extractor into the running one for a session.
 
     Args:
-        old_ext: Accumulated extractor so far.
-        new_ext: Extractor for the latest guess.
+        old_ext (LetterExtractor): Accumulated extractor so far.
+        new_ext (LetterExtractor): Extractor for the latest guess.
 
     Returns:
         LetterExtractor: `old_ext`, updated in place.
@@ -138,7 +137,7 @@ def gather_pool_letters(pool_words: WordsInformation) -> tuple[set[int], dict[in
     """Collect every letter present in a candidate pool, and duplicate-letter counts.
 
     Args:
-        pool_words: Candidate words with their entropy score.
+        pool_words (WordsInformation): Candidate words with their entropy score.
 
     Returns:
         tuple[set[int], dict[int, int]]: Letters seen across the pool, and the
@@ -166,10 +165,10 @@ def build_suggestion(pool_words_information: WordsInformation,
     """Rank candidate words by how many still-unknown letters they'd test.
 
     Args:
-        pool_words_information: Candidate words with their entropy score.
-        pool_letters: Every letter present across the candidate pool.
-        pool_letters_dupes: Maximum observed duplicate count per letter.
-        letter_extractor: Known-included/excluded letters so far.
+        pool_words_information (WordsInformation): Candidate words with their entropy score.
+        pool_letters (set[int]): Every letter present across the candidate pool.
+        pool_letters_dupes (dict[int, int]): Maximum observed duplicate count per letter.
+        letter_extractor (LetterExtractor): Known-included/excluded letters so far.
 
     Returns:
         list[WordsInformation | None]: Suggestions bucketed by number of
@@ -218,39 +217,9 @@ def safe_log2(x: int | float) -> int | float:
     """Compute `log2(x)`, treating non-positive input as zero information.
 
     Args:
-        x: Value to take the log of.
+        x (int | float): Value to take the log of.
 
     Returns:
         int | float: `log2(x)` if `x > 0`, else `0`.
     """
     return math.log2(x) if x > 0 else 0
-
-
-def build_pattern_compendium(pool_words: set[Tord]) -> PatternCompendium:
-    """Bucket every ordered `(word, guess)` pair in `pool_words` by resulting pattern.
-
-    `O(n**2)` in both time and memory: every ordered pair of distinct words is
-    evaluated once. This is what powers instant pattern-based pool filtering
-    later, at the cost of being expensive to build for large word lists.
-
-    Args:
-        pool_words: Candidate words to cross-evaluate.
-
-    Returns:
-        PatternCompendium: Pattern -> set of `(guess, word)` pairs producing it.
-    """
-    pattern_compendium: PatternCompendium = {}
-
-    for word, guess in itertools.permutations(pool_words, 2):
-        if word == guess:
-            continue
-
-        pattern = compute_pattern(guess=guess, word=word)
-
-        if pattern not in pattern_compendium:
-            pattern_compendium[pattern] = {(guess, word)}
-            continue
-
-        pattern_compendium[pattern].add((guess, word))
-
-    return pattern_compendium

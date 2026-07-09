@@ -16,8 +16,8 @@ def convert_pool_words(pool: list[tuple[tuple[int, ...], float]], shift: int) ->
     """Convert a pool of `(word, entropy)` tuples into display-ready entries.
 
     Args:
-        pool: Candidate words with their entropy score.
-        shift: Ordinal shift used to decode letters back to characters.
+        pool (list[tuple[tuple[int, ...], float]]): Candidate words with their entropy score.
+        shift (int): Ordinal shift used to decode letters back to characters.
 
     Returns:
         list[dict[str, float]]: One `{word: entropy}` mapping per candidate.
@@ -30,8 +30,8 @@ def convert_best_guess(best_guess: tuple[Tord, float] | None, shift: int) -> dic
     """Convert a single `(word, entropy)` pair into a display-ready entry.
 
     Args:
-        best_guess: The highest-entropy next guess, or `None` if unavailable.
-        shift: Ordinal shift used to decode letters back to characters.
+        best_guess (tuple[Tord, float] | None): The highest-entropy next guess, or `None` if unavailable.
+        shift (int): Ordinal shift used to decode letters back to characters.
 
     Returns:
         dict[str, float] | None: `{word: entropy}`, or `None` if `best_guess` is `None`.
@@ -47,8 +47,8 @@ def convert_pool_letters(pool_letters: set[int], shift: int) -> list[str]:
     """Convert a set of shifted letter ordinals into characters.
 
     Args:
-        pool_letters: Shifted letter ordinals.
-        shift: Ordinal shift used to decode letters back to characters.
+        pool_letters (set[int]): Shifted letter ordinals.
+        shift (int): Ordinal shift used to decode letters back to characters.
 
     Returns:
         list[str]: Decoded letters.
@@ -60,8 +60,8 @@ def convert_pool_letters_dupes(pool_letters_dupes: dict[int, int], shift: int) -
     """Convert a shifted-letter-ordinal duplicate-count mapping into characters.
 
     Args:
-        pool_letters_dupes: Mapping of shifted letter ordinal to max duplicate count.
-        shift: Ordinal shift used to decode letters back to characters.
+        pool_letters_dupes (dict[int, int]): Mapping of shifted letter ordinal to max duplicate count.
+        shift (int): Ordinal shift used to decode letters back to characters.
 
     Returns:
         dict[str, int]: Decoded mapping.
@@ -74,8 +74,8 @@ def convert_elimination_suggestions(suggestions: list[WordsInformation | None],
     """Convert ranked elimination suggestions into display-ready entries.
 
     Args:
-        suggestions: Suggestions bucketed by number of unknown letters covered.
-        shift: Ordinal shift used to decode letters back to characters.
+        suggestions (list[WordsInformation | None]): Suggestions bucketed by number of unknown letters covered.
+        shift (int): Ordinal shift used to decode letters back to characters.
 
     Returns:
         dict[int, list[dict[str, float]]]: Suggestions keyed by rank (1-indexed).
@@ -87,7 +87,7 @@ def convert_elimination_suggestions(suggestions: list[WordsInformation | None],
             continue
 
         temp_suggs = [{''.join(chr(ord_letter + shift) for ord_letter in suggestion): round(information, 5)}
-                     for suggestion, information in ranked_suggestions]
+                      for suggestion, information in ranked_suggestions]
 
         elimination_suggestions[rank + 1] = elimination_suggestions.get(rank + 1, []) + temp_suggs
 

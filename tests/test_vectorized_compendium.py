@@ -7,7 +7,7 @@ import pathlib
 import numpy as np
 import pytest
 
-from autoWordle.modules import compendium_cache, computing, entropy, statics, vectorized_compendium, word_codec
+from autoWordle.modules import compendium_cache, computing, legacy_compendium, statics, vectorized_compendium, word_codec
 
 #===================================================================================================
 
@@ -30,7 +30,7 @@ EXACT = statics.StatusLetter.EXACT.value
     ((19, 14, 21, 21, 34), (10, 21, 21, 10, 34), (MISS, MISS, EXACT, MISPLACED, EXACT)),
 ])
 def test_compute_patterns_for_guess_matches_reference(guess: tuple[int, ...], word: tuple[int, ...],
-                                                       expected: tuple[int, ...]) -> None:
+                                                      expected: tuple[int, ...]) -> None:
     words_arr = np.array([word], dtype=np.int16)
     guess_arr = np.array(guess, dtype=np.int16)
 
@@ -71,7 +71,7 @@ def test_compute_word_counter_by_pattern_cross_matches_brute_force(mini_words_fi
 
 
 def test_compute_word_counter_by_pattern_cross_includes_self_match(mini_words_file: pathlib.Path) -> None:
-    # Unlike `computing.build_pattern_compendium`'s self-pair skip, a guess
+    # Unlike `legacy_compendium.build_pattern_compendium`'s self-pair skip, a guess
     # that's also a target should register its own all-EXACT match - that's
     # meaningful information (this guess could itself be the answer), not a
     # redundant self-comparison to discard.
@@ -92,8 +92,8 @@ def test_stream_pattern_compendium_matches_full_compendium(tmp_path: pathlib.Pat
     # compendium at once and computing patterns via vectorized array ops.
     words = word_codec.get_words_list(mini_words_file, word_length=5, shift=ord('a') - 10)
 
-    expected_compendium = computing.build_pattern_compendium(words)
-    expected_counter = entropy.compute_word_counter_by_pattern(expected_compendium)
+    expected_compendium = legacy_compendium.build_pattern_compendium(words)
+    expected_counter = legacy_compendium.compute_word_counter_by_pattern(expected_compendium)
 
     patterns = [word_codec.tord_to_int(pattern, 10) for pattern in statics.pattern_permutations(5)]
     cache = compendium_cache.CacheDB(tmp_path / 'stream.sqlite', patterns, build_mode=True)
@@ -152,8 +152,8 @@ def test_stream_pattern_compendium_flushes_in_small_batches(tmp_path: pathlib.Pa
     # need) to make sure batching doesn't drop or duplicate entries.
     words = word_codec.get_words_list(mini_words_file, word_length=5, shift=ord('a') - 10)
 
-    expected_compendium = computing.build_pattern_compendium(words)
-    expected_counter = entropy.compute_word_counter_by_pattern(expected_compendium)
+    expected_compendium = legacy_compendium.build_pattern_compendium(words)
+    expected_counter = legacy_compendium.compute_word_counter_by_pattern(expected_compendium)
 
     patterns = [word_codec.tord_to_int(pattern, 10) for pattern in statics.pattern_permutations(5)]
     cache = compendium_cache.CacheDB(tmp_path / 'stream_small_batch.sqlite', patterns, build_mode=True)
