@@ -118,3 +118,17 @@ class SubmitGuessResponse(StatusResponse):
     """Response body for `POST /submit_guess`."""
 
     pattern: str | None = None
+
+
+class PrecomputeRequest(BaseModel):
+    """Request body for `POST /precompute`."""
+
+    lang: str
+    word_length: int = Field(gt=0)
+
+
+class PrecomputeResponse(StatusResponse):
+    """Response body for `POST /precompute`."""
+
+    job_status: statics.PrecomputeStatus | None = None
+    queue_position: int | None = None

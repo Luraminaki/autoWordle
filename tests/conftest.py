@@ -49,19 +49,19 @@ def test_app_root(tmp_path: pathlib.Path) -> pathlib.Path:
 def client(test_app_root: pathlib.Path, monkeypatch: pytest.MonkeyPatch):
     """A `TestClient` for the app, wired to `test_app_root` instead of the real repo data.
 
-    `webapp.api_views` builds its module-level `APP_SOURCES`/`SESSION_STORE`
-    once at import time; rather than evicting and re-importing `autoWordle.*`
-    (which leaves duplicate module objects around and breaks
-    `ProcessPoolExecutor`'s pickling identity checks for anything already
-    imported by another test module), just swap those two globals directly.
-    `SESSION_STORE` points at a throwaway sqlite file under `test_app_root`,
-    never the real one. `AUTOWORDLE_APP_ROOT` is also set so routes that
-    rebuild sources on every call (`/get_app_sources`) resolve to
-    `test_app_root` too.
+    `webapp.api_views` builds its module-level `APP_SOURCES`/`SESSION_STORE`/
+    `PRECOMPUTE_STORE` once at import time; rather than evicting and
+    re-importing `autoWordle.*` (which leaves duplicate module objects
+    around and breaks `ProcessPoolExecutor`'s pickling identity checks for
+    anything already imported by another test module), just swap those
+    globals directly. `SESSION_STORE`/`PRECOMPUTE_STORE` point at throwaway
+    sqlite files under `test_app_root`, never the real ones.
+    `AUTOWORDLE_APP_ROOT` is also set so routes that rebuild sources on
+    every call (`/get_app_sources`) resolve to `test_app_root` too.
     """
     from fastapi.testclient import TestClient
 
-    from autoWordle.app import models, session_store
+    from autoWordle.app import models, precompute_store, session_store
     from autoWordle.main import app
     from autoWordle.webapp import api_views
 
@@ -69,5 +69,6 @@ def client(test_app_root: pathlib.Path, monkeypatch: pytest.MonkeyPatch):
     test_app_sources = models.init_app_sources(app_root=test_app_root)
     monkeypatch.setattr(api_views, 'APP_SOURCES', test_app_sources)
     monkeypatch.setattr(api_views, 'SESSION_STORE', session_store.SessionStore(test_app_root / 'sessions.sqlite', test_app_sources))
+    monkeypatch.setattr(api_views, 'PRECOMPUTE_STORE', precompute_store.PrecomputeJobStore(test_app_root / 'precompute_jobs.sqlite'))
 
     return TestClient(app)

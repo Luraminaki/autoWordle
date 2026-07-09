@@ -56,6 +56,16 @@ class CacheDB:
         self.db: sqlite3.Connection = sqlite3.connect(self.db_path, timeout=5.0, isolation_level=None, check_same_thread=False)
 
         with self.lock:
+            # Set *before* any other pragma, including `journal_mode`/
+            # `synchronous` below: those can themselves hit "database is
+            # locked" if another connection to the same file is momentarily
+            # busy (e.g. a second `CacheDB` opened for an already-loaded,
+            # already-open language - now a real scenario once precompute
+            # can be triggered on demand, not just once at startup), and
+            # without `busy_timeout` set yet, that first contended call
+            # fails immediately instead of retrying.
+            _ = self.db.execute('PRAGMA busy_timeout=5000')
+
             if build_mode:
                 # One-time bulk build of a fully regenerable cache: avoid WAL
                 # entirely. WAL's periodic auto-checkpointing (writing
@@ -72,7 +82,6 @@ class CacheDB:
                 _ = self.db.execute('PRAGMA synchronous=NORMAL')
 
             _ = self.db.execute('PRAGMA temp_store=MEMORY')
-            _ = self.db.execute('PRAGMA busy_timeout=5000')
             _ = self.db.execute('PRAGMA cache_size=-20000')  # ~20 MB page cache, negative = KB
 
             with self.db:

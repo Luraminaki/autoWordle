@@ -44,6 +44,20 @@ class StatusFunction(enum.StrEnum):
     WARNING = 'WARNING'
 
 
+class PrecomputeStatus(enum.StrEnum):
+    """A precompute job's lifecycle state, as tracked by `app.precompute_store`.
+
+    A `str` enum for the same reason as `GameMode`/`StatusFunction`: it's
+    stored as plain text in SQLite and serialized as-is over the API/SSE
+    boundary, with no separate mapping needed either direction.
+    """
+
+    QUEUED = 'queued'
+    RUNNING = 'running'
+    DONE = 'done'
+    FAILED = 'failed'
+
+
 _PATTERN_TO_EMOJI = {
     StatusLetter.MISS: '⬛',
     StatusLetter.MISPLACED: '🟨',

@@ -10,6 +10,7 @@ connection in unsafe/exclusive mode after any write.
 
 #===================================================================================================
 import pathlib
+import threading
 
 from autoWordle.modules import compendium_cache
 
@@ -131,3 +132,38 @@ def test_read_mode_uses_wal_and_normal_synchronous(tmp_path: pathlib.Path) -> No
     assert synchronous == 1  # NORMAL
     assert read_cache.get_entries(111) == [(1, 10)]
     read_cache.close()
+
+
+def test_concurrent_open_of_already_open_cache_does_not_raise(tmp_path: pathlib.Path) -> None:
+    # Regression test: `busy_timeout` used to be set *after* `journal_mode`/
+    # `synchronous`, so opening a second connection to a file another
+    # `CacheDB` already had open (a real scenario once precompute jobs can be
+    # triggered on demand - e.g. re-requesting an already-built language
+    # while its live `LangLauncher.cache` connection is still held) could hit
+    # "database is locked" immediately instead of retrying within the
+    # timeout window. Reproduced originally via a real on-demand rebuild that
+    # raced an already-open cache; this hammers the same race directly.
+    db_path = tmp_path / 'cache.sqlite'
+    first = compendium_cache.CacheDB(db_path, patterns=[111], build_mode=True)
+    _ = first.add_entries(111, guess=[1], word=[10])
+    first.close()
+
+    first = compendium_cache.CacheDB(db_path, build_mode=False)
+
+    errors: list[Exception] = []
+
+    def open_second() -> None:
+        try:
+            second = compendium_cache.CacheDB(db_path, build_mode=False)
+            second.close()
+        except Exception as err:  # deliberately broad - this is what we're asserting doesn't happen
+            errors.append(err)
+
+    threads = [threading.Thread(target=open_second) for _ in range(20)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+
+    first.close()
+    assert not errors

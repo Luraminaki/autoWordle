@@ -11,6 +11,7 @@ the companion `word_codec` module instead.
 import logging
 import pathlib
 import time
+from collections.abc import Callable
 from typing import override
 
 from autoWordle.modules import compendium_cache, computing, entropy, statics, vectorized_compendium, word_codec
@@ -24,7 +25,8 @@ class LangLauncher:
     def __init__(self, words_path: str | pathlib.Path,
                 compute_best_opening: bool = False,
                 word_length: int = 5,
-                threads: int = 0) -> None:
+                threads: int = 0,
+                progress_callback: Callable[[float, float], None] | None = None) -> None:
         """Load the word list and, if requested/available, exhaustive solver data.
 
         Args:
@@ -33,6 +35,9 @@ class LangLauncher:
                 entropy/pattern-cache data if it isn't already on disk.
             word_length: Word length to filter the list to.
             threads: Worker process count for entropy computation (0 = all CPUs).
+            progress_callback: If given and a build actually runs, called with
+                `(fraction_done, eta_seconds)` periodically - see
+                `vectorized_compendium.stream_pattern_compendium_to_cache`.
 
         Raises:
             ValueError: If no word matches `word_length` in `words_path`.
@@ -53,7 +58,7 @@ class LangLauncher:
         logger.info("Found %d words...", len(self.words))
 
         self.cache: compendium_cache.CacheDB | None = None
-        self.words_information: computing.WordsInformation = self.compute_words_information(compute_best_opening)
+        self.words_information: computing.WordsInformation = self.compute_words_information(compute_best_opening, progress_callback)
 
         tac = time.perf_counter() - tic
         logger.info("Language launcher for %s initialised in %s second(s)", self.words_file.name, round(tac, 2))
@@ -93,7 +98,9 @@ class LangLauncher:
                for word in self.cache.get_words_for_guess(pattern_int, guess_int)}
 
 
-    def _build_cache(self, path: pathlib.Path) -> tuple[compendium_cache.CacheDB, computing.WordCounterByPattern]:
+    def _build_cache(self, path: pathlib.Path,
+                     progress_callback: Callable[[float, float], None] | None = None,
+                     ) -> tuple[compendium_cache.CacheDB, computing.WordCounterByPattern]:
         """Build a fresh pattern cache for `self.words`, streaming pairs in as they're computed.
 
         Pre-creates a table for every one of the `3 ** word_length` possible
@@ -103,6 +110,8 @@ class LangLauncher:
 
         Args:
             path: SQLite cache file path (must not exist yet).
+            progress_callback: Forwarded to
+                `vectorized_compendium.stream_pattern_compendium_to_cache`.
 
         Returns:
             tuple[compendium_cache.CacheDB, computing.WordCounterByPattern]: The
@@ -115,19 +124,23 @@ class LangLauncher:
         cache = compendium_cache.CacheDB(path, patterns, build_mode=True)
 
         tic = time.perf_counter()
-        word_counter_by_pattern = vectorized_compendium.stream_pattern_compendium_to_cache(self.words, cache)
+        word_counter_by_pattern = vectorized_compendium.stream_pattern_compendium_to_cache(
+            self.words, cache, progress_callback=progress_callback)
         tac = time.perf_counter() - tic
         logger.info("Built cache compendium in %s second(s)...", round(tac, 2))
 
         return cache, word_counter_by_pattern
 
 
-    def compute_words_information(self, compute_best_opening: bool) -> computing.WordsInformation:
+    def compute_words_information(self, compute_best_opening: bool,
+                                  progress_callback: Callable[[float, float], None] | None = None,
+                                  ) -> computing.WordsInformation:
         """Load or compute this language's entropy ranking and pattern cache.
 
         Args:
             compute_best_opening: Whether to compute (and persist) exhaustive
                 data if it isn't already on disk.
+            progress_callback: Forwarded to `_build_cache` if a build actually runs.
 
         Returns:
             computing.WordsInformation: Words ranked by entropy, descending
@@ -143,11 +156,11 @@ class LangLauncher:
             if cache_file.exists():
                 self.cache = compendium_cache.CacheDB(cache_file)
             else:
-                self.cache, _ = self._build_cache(cache_file)
+                self.cache, _ = self._build_cache(cache_file, progress_callback)
 
         elif compute_best_opening:
             logger.info("Computing and saving exhaustive information for best opening...")
-            self.cache, word_counter_by_pattern = self._build_cache(cache_file)
+            self.cache, word_counter_by_pattern = self._build_cache(cache_file, progress_callback)
             words_information = entropy.rank_words_by_entropy(self.words, word_counter_by_pattern, self.threads)
             word_codec.save_words_information(words_information_file, words_information, self.shift)
 

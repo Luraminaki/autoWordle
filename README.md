@@ -42,6 +42,10 @@ It's still a "work in progress" as of now... And there is a lot of room for impr
   for guesses with a repeated letter where one occurrence is an exact match
   (e.g. guessing "jelly" against "allay" incorrectly scored the second "l" as
   black instead of yellow) - existing precomputed sidecars need regenerating.
+- 0.2.2: Exhaustive-data precomputation can now be triggered on demand
+  through the API (`POST /precompute`) instead of only at process startup or
+  via a manual CLI command, with live progress/ETA over Server-Sent Events
+  (`GET /precompute_progress`) - see [THE SOLVER](#the-solver).
 
 ## ARCHITECTURE
 
@@ -67,6 +71,7 @@ autoWordle/                  # the installable package
 ├── app/                      # session/app-state domain + cross-cutting utilities
 │   ├── models.py              # session/app-state management
 │   ├── session_store.py        # SQLite-backed persistent session store
+│   ├── precompute_store.py      # SQLite-backed precompute job progress/queue/lock
 │   ├── display.py                # pure display-formatting helpers (models companion)
 │   ├── schemas.py                 # core Pydantic domain models (config, app sources, session state)
 │   ├── logging_utils.py            # logging setup (rotating file + console)
@@ -118,9 +123,19 @@ since vectorization amortizes better the more pairs there are.
 This is only computed for the bundled 5-letter `wordle.txt` answer list by
 default (see `data/wordle_5_compendium.sqlite`/`data/wordle_5_info.csv`) -
 it's still `O(n**2)` in time, so it's not triggered automatically for the
-much larger `en.txt`/`fr.txt` dictionaries. See
-[INSTALL.md](INSTALL.md#regenerating-solver-data-for-a-new-languageword-length)
-for how to precompute it for another language/word length.
+much larger `en.txt`/`fr.txt` dictionaries. Besides the manual CLI command
+(see [INSTALL.md](INSTALL.md#regenerating-solver-data-for-a-new-languageword-length)),
+it can now also be triggered on demand through `POST /precompute`
+(`{"lang", "word_length"}`), which runs the build in the background and
+returns immediately with the job's status (`running`/`queued`) and, if
+queued, its position; live progress (`% complete`, ETA) streams over
+Server-Sent Events from `GET /precompute_progress?lang=...&word_length=...`
+until the job finishes. Since this app can run multiple `uvicorn` workers,
+`app/precompute_store.py` (SQLite-backed, same reasoning as the session
+store) tracks job state across all of them: it never builds the same
+`(lang, word_length)` twice, caps global concurrency at one build at a time
+(two heavy numpy builds would only fight over the same cores), and queues
+everything else, handing off to the next queued job as each one finishes.
 
 `GAME_MODE_PLAY` only ever needs the plain word list (no precomputed data
 required); `GAME_MODE_SOLVE`/`GAME_MODE_ASSISTED` need the exhaustive data
@@ -157,6 +172,8 @@ docs are served at `/docs` once the app is running. Every response has a
 | `/get_word_to_guess` | POST | Reveal the hidden word (solve/assisted modes) |
 | `/get_guess_stats` | POST | Elimination/solver statistics for a guess (solve/assisted modes) |
 | `/submit_guess` | POST | Submit a guess, get back its emoji pattern (play mode) |
+| `/precompute` | POST | Trigger (or join) an exhaustive-data build for `lang`/`word_length` |
+| `/precompute_progress` | GET | SSE stream of a precompute job's live progress/ETA until it finishes |
 
 ## INSTALLATION
 

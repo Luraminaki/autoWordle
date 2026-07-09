@@ -2,6 +2,8 @@
 """End-to-end tests for the FastAPI routes in `webapp.api_views`, via the mini word list."""
 
 #===================================================================================================
+import json
+
 from fastapi.testclient import TestClient
 
 #===================================================================================================
@@ -74,3 +76,87 @@ def test_delete_game_session(client: TestClient) -> None:
 
     stats = client.post('/api/app/get_game_session_stats', json={'session_uuid': session_uuid})
     assert stats.json()['status'] == 'ERROR'
+
+
+def test_precompute_builds_and_progress_reports_done(client: TestClient) -> None:
+    # `mini` starts with `compute_best_opening=False` (see conftest's
+    # test config), so GAME_MODE_SOLVE isn't allowed for it yet.
+    solve_before = client.post('/api/app/create_game_session',
+                               json={'lang': 'mini', 'word_length': 5, 'max_tries': 6, 'game_mode': 'GAME_MODE_SOLVE'})
+    assert solve_before.json()['status'] == 'ERROR'
+
+    trigger = client.post('/api/app/precompute', json={'lang': 'mini', 'word_length': 5})
+    body = trigger.json()
+    assert trigger.status_code == 200
+    assert body['status'] == 'SUCCESS'
+    assert body['job_status'] == 'running'
+    assert body['queue_position'] is None
+
+    # `TestClient` runs scheduled `BackgroundTasks` to completion within the
+    # same call that returned `trigger` above (the tiny mini.txt build is
+    # well within that window), so the job should already be done by now -
+    # still read the SSE stream to exercise it, not just assume this.
+    with client.stream('GET', '/api/app/precompute_progress', params={'lang': 'mini', 'word_length': 5}) as stream:
+        events = []
+        for line in stream.iter_lines():
+            if not line.startswith('data: '):
+                continue
+            events.append(json.loads(line[len('data: '):]))
+            if events[-1]['status'] in ('done', 'failed'):
+                break
+
+    assert events
+    assert events[-1]['status'] == 'done'
+    assert events[-1]['fraction_done'] == 1.0
+
+    # The swap into the shared AppSources actually took effect - GAME_MODE_SOLVE
+    # should now be allowed.
+    solve_after = client.post('/api/app/create_game_session',
+                             json={'lang': 'mini', 'word_length': 5, 'max_tries': 6, 'game_mode': 'GAME_MODE_SOLVE'})
+    assert solve_after.json()['status'] == 'SUCCESS'
+
+
+def test_precompute_duplicate_request_does_not_restart(client: TestClient) -> None:
+    from autoWordle.webapp import api_views
+
+    # Simulate a build already in progress for this combo, bypassing the
+    # route (TestClient runs BackgroundTasks to completion synchronously, so
+    # a real request/request race can't be reproduced through the HTTP layer
+    # in this test environment).
+    first = api_views.PRECOMPUTE_STORE.request('mini', 5)
+    assert first.should_start is True
+
+    response = client.post('/api/app/precompute', json={'lang': 'mini', 'word_length': 5})
+    body = response.json()
+
+    assert body['status'] == 'SUCCESS'
+    assert body['job_status'] == 'running'
+
+
+def test_precompute_second_combo_queues_behind_running_job(client: TestClient) -> None:
+    from autoWordle.webapp import api_views
+
+    first = api_views.PRECOMPUTE_STORE.request('mini', 5)
+    assert first.should_start is True
+
+    response = client.post('/api/app/precompute', json={'lang': 'mini', 'word_length': 6})
+    body = response.json()
+
+    assert body['status'] == 'SUCCESS'
+    assert body['job_status'] == 'queued'
+    assert body['queue_position'] == 1
+
+
+def test_precompute_rejects_unknown_language(client: TestClient) -> None:
+    response = client.post('/api/app/precompute', json={'lang': 'does-not-exist', 'word_length': 5})
+    body = response.json()
+
+    assert response.status_code == 200
+    assert body['status'] == 'ERROR'
+
+
+def test_precompute_progress_reports_not_found_for_unrequested_combo(client: TestClient) -> None:
+    with client.stream('GET', '/api/app/precompute_progress', params={'lang': 'mini', 'word_length': 5}) as stream:
+        line = next(line for line in stream.iter_lines() if line.startswith('data: '))
+
+    assert json.loads(line[len('data: '):])['status'] == 'not_found'

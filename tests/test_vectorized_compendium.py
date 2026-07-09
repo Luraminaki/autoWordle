@@ -93,6 +93,29 @@ def test_stream_pattern_compendium_rejects_out_of_range_letters(tmp_path: pathli
     cache.close()
 
 
+def test_stream_pattern_compendium_calls_progress_callback(tmp_path: pathlib.Path, mini_words_file: pathlib.Path,
+                                                           monkeypatch: pytest.MonkeyPatch) -> None:
+    # Force the callback to fire on every guess (instead of waiting
+    # `_PROGRESS_LOG_INTERVAL_SECONDS` between calls) so this test doesn't
+    # depend on wall-clock timing.
+    monkeypatch.setattr(vectorized_compendium, '_PROGRESS_LOG_INTERVAL_SECONDS', 0.0)
+
+    words = word_codec.get_words_list(mini_words_file, word_length=5, shift=ord('a') - 10)
+    patterns = [word_codec.tord_to_int(pattern, 10) for pattern in statics.pattern_permutations(5)]
+    cache = compendium_cache.CacheDB(tmp_path / 'progress.sqlite', patterns, build_mode=True)
+
+    calls: list[tuple[float, float]] = []
+    _ = vectorized_compendium.stream_pattern_compendium_to_cache(
+        words, cache, progress_callback=lambda fraction_done, eta_seconds: calls.append((fraction_done, eta_seconds)))
+
+    assert len(calls) == len(words)
+    assert all(0.0 < fraction_done <= 1.0 for fraction_done, _ in calls)
+    assert all(eta_seconds >= 0.0 for _, eta_seconds in calls)
+    assert calls[-1][0] == 1.0  # last call is 100% done
+
+    cache.close()
+
+
 def test_stream_pattern_compendium_flushes_in_small_batches(tmp_path: pathlib.Path, mini_words_file: pathlib.Path) -> None:
     # Same equivalence check, forced through multiple flush cycles (default
     # batch_size is 200_000, far larger than this tiny word list would ever

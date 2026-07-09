@@ -15,7 +15,7 @@ import time
 import uuid
 from typing import Literal, overload
 
-from autoWordle.app import display, paths, schemas
+from autoWordle.app import display, paths, precompute_store, schemas
 from autoWordle.modules import computing, helpers, statics, wordle
 
 logger = logging.getLogger(__name__)
@@ -23,6 +23,10 @@ logger = logging.getLogger(__name__)
 
 class GameSessionNotAllowedError(ValueError):
     """Raised when a game session cannot be created for the requested language/mode."""
+
+
+class PrecomputeNotAllowedError(ValueError):
+    """Raised when a precompute build is requested for an unknown language."""
 
 
 @dataclasses.dataclass
@@ -269,3 +273,72 @@ def submit_guess(session: GameSession, word: str) -> str | None:
     session.meta.last_active_timestamp = int(time.time())
 
     return pattern
+
+
+def request_precompute(app_sources: schemas.AppSources, job_store: precompute_store.PrecomputeJobStore,
+                       lang: str, word_length: int) -> precompute_store.PrecomputeRequestResult:
+    """Request an exhaustive-data build for `lang`/`word_length`.
+
+    Only validates that `lang` is known - the actual build (in
+    `run_precompute_job`) re-reads `app_sources` itself once it actually
+    runs, since a queued request might sit for a while before that happens.
+
+    Args:
+        app_sources: Assembled application sources.
+        job_store: Precompute job store.
+        lang: Language stem.
+        word_length: Word length to precompute.
+
+    Returns:
+        precompute_store.PrecomputeRequestResult: Current status/queue
+        position, and whether the caller should run the build itself.
+
+    Raises:
+        PrecomputeNotAllowedError: If `lang` isn't a known language.
+    """
+    if lang not in app_sources.langs:
+        raise PrecomputeNotAllowedError(f'Unknown language {lang!r}')
+
+    return job_store.request(lang, word_length)
+
+
+def run_precompute_job(app_sources: schemas.AppSources, job_store: precompute_store.PrecomputeJobStore,
+                       lang: str, word_length: int) -> None:
+    """Build exhaustive data for `lang`/`word_length`, then dispatch the next queued job if any.
+
+    The background body scheduled via `fastapi.BackgroundTasks` by the
+    `/precompute` route. Runs as a loop, not recursion - a long queue chained
+    through recursive calls would grow the call stack for no reason, since
+    this always runs in a thread-pool thread with no caller waiting on it.
+
+    Args:
+        app_sources: Shared application sources, mutated in place once a
+            build completes - the freshly built `LangLauncher` replaces (or
+            creates) `app_sources.langs[lang].pre_computed[str(word_length)]`.
+        job_store: Precompute job store.
+        lang: Language stem to build first.
+        word_length: Word length to build first.
+    """
+    current: tuple[str, int] | None = (lang, word_length)
+
+    while current is not None:
+        current_lang, current_word_length = current
+
+        try:
+            lang_file = app_sources.langs[current_lang].path
+
+            def progress_callback(fraction_done: float, eta_seconds: float,
+                                  lang: str = current_lang, word_length: int = current_word_length) -> None:
+                job_store.update_progress(lang, word_length, fraction_done, eta_seconds)
+
+            new_launcher = helpers.LangLauncher(lang_file, compute_best_opening=True, word_length=current_word_length,
+                                               progress_callback=progress_callback)
+
+            app_sources.langs[current_lang].pre_computed[str(current_word_length)] = schemas.PrecomputedEntry(
+                path=lang_file, length=current_word_length, lang_launcher=new_launcher)
+
+            current = job_store.mark_done(current_lang, current_word_length)
+
+        except Exception as err:
+            logger.exception("Precompute job failed for %s/%d", current_lang, current_word_length)
+            current = job_store.mark_failed(current_lang, current_word_length, repr(err))

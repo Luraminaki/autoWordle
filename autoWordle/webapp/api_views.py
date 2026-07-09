@@ -5,9 +5,13 @@
 @rules: https://en.wikipedia.org/wiki/Wordle
 """
 
-from fastapi import APIRouter
+import asyncio
+import json
 
-from autoWordle.app import models, paths, session_store
+from fastapi import APIRouter, BackgroundTasks
+from fastapi.responses import StreamingResponse
+
+from autoWordle.app import models, paths, precompute_store, session_store
 from autoWordle.modules import statics
 from autoWordle.webapp import api_schemas
 
@@ -15,6 +19,12 @@ route = APIRouter(prefix='/api/app', tags=['API'])
 
 APP_SOURCES = models.init_app_sources()
 SESSION_STORE = session_store.SessionStore(paths.get_app_root() / APP_SOURCES.config.data_folder / 'sessions.sqlite', APP_SOURCES)
+PRECOMPUTE_STORE = precompute_store.PrecomputeJobStore(paths.get_app_root() / APP_SOURCES.config.data_folder / 'precompute_jobs.sqlite')
+
+# Server-side poll interval for the SSE progress stream below - the client
+# never polls (a single long-lived EventSource connection), this is only how
+# often the generator re-reads the shared, multi-worker-safe job store.
+_PROGRESS_POLL_INTERVAL_SECONDS = 1.0
 
 
 @route.get('/version')
@@ -164,5 +174,62 @@ async def submit_guess(request: api_schemas.SubmitGuessRequest) -> api_schemas.S
         return api_schemas.SubmitGuessResponse(status=statics.StatusFunction.ERROR, error=repr(err))
 
     return api_schemas.SubmitGuessResponse(status=statics.StatusFunction.SUCCESS, pattern=pattern)
+
+
+@route.post('/precompute')
+async def precompute(request: api_schemas.PrecomputeRequest, background_tasks: BackgroundTasks) -> api_schemas.PrecomputeResponse:
+    """Trigger (or join) an exhaustive-data build for a language/word length.
+
+    Returns immediately - `should_start` in the underlying job-store result
+    decides whether *this* request is the one that actually schedules the
+    (potentially multi-minute) build as a background task; a duplicate
+    request for the same, already-running/queued combination just reports
+    its current status instead of starting a second one.
+    """
+    try:
+        lang = request.lang.lower()
+        result = models.request_precompute(APP_SOURCES, PRECOMPUTE_STORE, lang, request.word_length)
+
+        if result.should_start:
+            background_tasks.add_task(models.run_precompute_job, APP_SOURCES, PRECOMPUTE_STORE, lang, request.word_length)
+
+    except models.PrecomputeNotAllowedError as err:
+        return api_schemas.PrecomputeResponse(status=statics.StatusFunction.ERROR, error=str(err))
+
+    except Exception as err:
+        return api_schemas.PrecomputeResponse(status=statics.StatusFunction.ERROR, error=repr(err))
+
+    return api_schemas.PrecomputeResponse(status=statics.StatusFunction.SUCCESS,
+                                          job_status=result.status, queue_position=result.position)
+
+
+@route.get('/precompute_progress')
+async def precompute_progress(lang: str, word_length: int) -> StreamingResponse:
+    """Stream live progress for a precompute job via Server-Sent Events until it finishes.
+
+    The client holds a single `EventSource` connection and never polls;
+    the polling happens server-side against the shared, multi-worker-safe
+    `PRECOMPUTE_STORE` (see its module docstring) to feed this stream.
+    """
+    lang_lower = lang.lower()
+
+    async def event_stream():
+        while True:
+            job = PRECOMPUTE_STORE.get_status(lang_lower, word_length)
+
+            if job is None:
+                yield f"data: {json.dumps({'status': 'not_found'})}\n\n"
+                return
+
+            payload = {'status': job.status.value, 'fraction_done': job.fraction_done,
+                      'eta_seconds': job.eta_seconds, 'position': job.position, 'error': job.error}
+            yield f"data: {json.dumps(payload)}\n\n"
+
+            if job.status in (statics.PrecomputeStatus.DONE, statics.PrecomputeStatus.FAILED):
+                return
+
+            await asyncio.sleep(_PROGRESS_POLL_INTERVAL_SECONDS)
+
+    return StreamingResponse(event_stream(), media_type='text/event-stream')
 
 # fastapi dev autoWordle/main.py

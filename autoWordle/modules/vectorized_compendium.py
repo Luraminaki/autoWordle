@@ -20,6 +20,8 @@ just with a vectorized inner loop.
 """
 
 import logging
+import time
+from collections.abc import Callable
 
 import numpy as np
 
@@ -27,6 +29,12 @@ from autoWordle.modules import compendium_cache, statics, word_codec
 from autoWordle.modules.computing import Tord, WordCounterByPattern
 
 logger = logging.getLogger(__name__)
+
+# How often (in wall-clock seconds) to log build progress - time-based rather
+# than every-N-guesses so the log cadence stays reasonable regardless of pool
+# size or machine speed (a 2315-word list finishes in seconds; a 7452-word
+# one at word_length=6 takes minutes).
+_PROGRESS_LOG_INTERVAL_SECONDS = 5.0
 
 # `word_codec` encodes letters as `ord(letter) - shift` with `shift = ord('a') - 10`,
 # i.e. every letter (already normalized to lowercase a-z by `unidecode` in
@@ -89,7 +97,8 @@ def _compute_patterns_for_guess(guess_row: np.ndarray, words_arr: np.ndarray) ->
 
 
 def stream_pattern_compendium_to_cache(pool_words: set[Tord], cache: compendium_cache.CacheDB,
-                                       batch_size: int = _STREAM_BATCH_SIZE) -> WordCounterByPattern:
+                                       batch_size: int = _STREAM_BATCH_SIZE,
+                                       progress_callback: Callable[[float, float], None] | None = None) -> WordCounterByPattern:
     """Cross-evaluate every ordered pair in `pool_words`, one guess at a time, vectorized.
 
     Same `(guess, word)` pairs as `computing.build_pattern_compendium`, but
@@ -98,6 +107,12 @@ def stream_pattern_compendium_to_cache(pool_words: set[Tord], cache: compendium_
     Python-level `computing.compute_pattern` call per pair, and matches are
     written to `cache` in bounded batches instead of being held in a full
     `O(n**2)` `PatternCompendium` first.
+
+    Logs progress (`% complete`, ETA) and, if given, calls `progress_callback`
+    with the same numbers, at most once every `_PROGRESS_LOG_INTERVAL_SECONDS`
+    - each guess does essentially equal work (same vectorized computation
+    size every iteration), so the linear `elapsed / fraction_done`
+    extrapolation is accurate here, unlike most progress estimates.
 
     Args:
         pool_words: Candidate words to cross-evaluate. Every letter must fall
@@ -111,6 +126,10 @@ def stream_pattern_compendium_to_cache(pool_words: set[Tord], cache: compendium_
             every possible pattern (see `statics.pattern_permutations`).
         batch_size: Flush buffered pairs to `cache` once at least this many
             are pending - bounds peak memory independent of word-list size.
+        progress_callback: If given, called with `(fraction_done, eta_seconds)`
+            on the same cadence as the progress log line - e.g. to publish
+            progress somewhere observable across processes (see
+            `app.precompute_store`), rather than just the local log.
 
     Returns:
         WordCounterByPattern: Pattern -> {guess: occurrence count}.
@@ -140,8 +159,23 @@ def stream_pattern_compendium_to_cache(pool_words: set[Tord], cache: compendium_
         pending.clear()
         pending_count = 0
 
+    total_words = len(words_list)
+    tic = time.perf_counter()
+    last_log = tic
+
     for gi, guess in enumerate(words_list):
         pattern_ints = _compute_patterns_for_guess(words_arr[gi], words_arr)
+
+        now = time.perf_counter()
+        if now - last_log >= _PROGRESS_LOG_INTERVAL_SECONDS:
+            elapsed = now - tic
+            fraction_done = (gi + 1) / total_words
+            eta_seconds = (elapsed / fraction_done) - elapsed
+            logger.info("Building pattern compendium: %.1f%% (%d/%d guesses), ~%.0fs remaining",
+                        fraction_done * 100, gi + 1, total_words, eta_seconds)
+            if progress_callback is not None:
+                progress_callback(fraction_done, eta_seconds)
+            last_log = now
 
         order = np.argsort(pattern_ints, kind='stable')
         sorted_patterns = pattern_ints[order]
