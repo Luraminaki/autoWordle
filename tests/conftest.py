@@ -32,7 +32,6 @@ def test_app_root(tmp_path: pathlib.Path) -> pathlib.Path:
 
     config = {
         'service_id': 'wordle-test',
-        'version': '0.0.0-test',
         'logging_level': 'INFO',
         'data_folder': 'data/',
         'compute_best_opening': False,

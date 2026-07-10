@@ -5,11 +5,17 @@
 @rules: https://en.wikipedia.org/wiki/Wordle
 """
 
+import importlib.metadata
 import json
 import os
 import pathlib
 
 APP_ROOT_ENV_VAR = 'AUTOWORDLE_APP_ROOT'
+
+# Matches `pyproject.toml`'s `[project] name` - the installed distribution's
+# metadata is the single source of truth for the running version (see
+# `get_app_version`), instead of a second copy hardcoded in `config.json`.
+_DISTRIBUTION_NAME = 'autowordle'
 
 
 def get_app_root() -> pathlib.Path:
@@ -45,3 +51,21 @@ def load_json_config(path: pathlib.Path) -> dict:
         raise FileNotFoundError(f"Config file not found: {path}")
 
     return json.loads(path.read_text(encoding='utf-8'))
+
+
+def get_app_version() -> str:
+    """Resolve the running application's version from installed package metadata.
+
+    Reads `pyproject.toml`'s `[project] version` back via the installed
+    distribution's metadata rather than duplicating the number a second time
+    in `config.json`, where it could silently drift out of sync on a bump.
+
+    Returns:
+        str: The installed version, or a placeholder if the package isn't
+        installed (e.g. running straight from a checkout without
+        `pip install -e .`).
+    """
+    try:
+        return importlib.metadata.version(_DISTRIBUTION_NAME)
+    except importlib.metadata.PackageNotFoundError:
+        return '0.0.0-dev'

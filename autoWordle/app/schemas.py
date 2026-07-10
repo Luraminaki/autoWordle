@@ -24,12 +24,16 @@ from autoWordle.modules.helpers import LangLauncher
 
 
 class AppConfig(BaseModel):
-    """Validated shape of `config.json`."""
+    """Validated shape of `config.json`.
+
+    Deliberately has no `version` field - that's not user-configurable, it's
+    a fact about which code is installed, so it's read from package metadata
+    instead (`paths.get_app_version`) rather than duplicated here.
+    """
 
     model_config = ConfigDict(populate_by_name=True)
 
     service_id: str
-    version: str
     logging_level: str
     data_folder: str
     compute_best_opening: bool = False
@@ -56,6 +60,7 @@ class PrecomputedEntry(BaseModel):
     path: pathlib.Path
     length: int
     lang_launcher: LangLauncher | None = None
+    has_exhaustive_data: bool = False
 
 
 class LangSource(BaseModel):
@@ -83,6 +88,7 @@ class PrecomputedEntryClient(BaseModel):
     path: str
     length: int
     lang_launcher: str
+    has_exhaustive_data: bool = False
 
 
 class LangSourceClient(BaseModel):

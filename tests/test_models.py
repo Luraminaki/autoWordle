@@ -20,7 +20,7 @@ def test_app_config_rejects_malformed_shape() -> None:
 
 def test_app_config_defaults_default_word_lengths() -> None:
     conf = schemas.AppConfig.model_validate({
-        'service_id': 'wordle', 'version': '0.0.0', 'logging_level': 'INFO', 'data_folder': 'data/',
+        'service_id': 'wordle', 'logging_level': 'INFO', 'data_folder': 'data/',
         'MAX_SESSIONS': 5, 'SESSION_TTL_SECONDS': 1800,
     })
     assert conf.default_word_lengths == [5]

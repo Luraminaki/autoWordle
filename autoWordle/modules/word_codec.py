@@ -113,7 +113,12 @@ def save_words_information(path: pathlib.Path, words_information: WordsInformati
     """
     path.unlink(missing_ok=True)
 
-    with path.open('a', encoding='utf-8') as fp:
+    # `newline=''` is required by the stdlib csv module whenever it does the
+    # line-ending writing itself: without it, Python's universal-newline text
+    # mode also translates the `\n` inside csv.writer's own `\r\n` terminator
+    # on Windows, doubling every row separator into `\r\r\n` - `csv.reader`
+    # then chokes on the resulting blank rows.
+    with path.open('a', encoding='utf-8', newline='') as fp:
         writer = csv.writer(fp)
 
         for word, entropy in words_information:
@@ -130,6 +135,8 @@ def load_words_information(path: pathlib.Path, shift: int) -> WordsInformation:
     Returns:
         WordsInformation: Words ranked by entropy, as persisted.
     """
-    with path.open('r', encoding='utf-8') as fp:
+    # See save_words_information's `newline=''` note - the csv module docs
+    # recommend it symmetrically for reading too.
+    with path.open('r', encoding='utf-8', newline='') as fp:
         reader = csv.reader(fp)
         return [(tuple(ord(letter) - shift for letter in word), float(entropy)) for word, entropy in reader]

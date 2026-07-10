@@ -226,7 +226,13 @@ def init_lang_app_data(lang_files: list[pathlib.Path],
                             # `str(LangLauncher)` (the class, not an instance) never actually
                             # invokes `LangLauncher.__str__` - it gives "<class '...'>". Use
                             # `__name__` directly for the intended plain "LangLauncher" placeholder.
-                            'lang_launcher': LangLauncher(lang_file, build_exhaustive, word_length) if not client else LangLauncher.__name__}
+                            'lang_launcher': LangLauncher(lang_file, build_exhaustive, word_length) if not client else LangLauncher.__name__,
+                            # Whether this length has a real `*_info.csv` marker on disk, as
+                            # opposed to a bare `default_word_lengths` entry with only a plain
+                            # word list (PLAY-mode only) - the only signal a client can use to
+                            # know SOLVE/ASSISTED are actually available without attempting
+                            # (and having rejected) a session creation first.
+                            'has_exhaustive_data': word_length in discovered_lengths}
             app_sources[lang_file.stem]['pre_computed'][str(word_length)] = pre_computed
 
     return app_sources

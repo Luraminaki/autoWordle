@@ -50,7 +50,7 @@ def create_app() -> FastAPI:
         allow_headers=['*'],
     )
 
-    frontend_dir = paths.get_app_root() / 'frontend' / '.output' / 'public'
+    frontend_dir = paths.get_app_root() / 'frontend'
 
     # MUST be in that specific order, else it doesn't work
     fastapi_app.include_router(api_views.route)

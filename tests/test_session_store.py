@@ -19,7 +19,7 @@ def _build_app_sources(tmp_path: pathlib.Path, mini_words_file: pathlib.Path) ->
     pre_computed = schemas.PrecomputedEntry(path=words_file, length=5, lang_launcher=lang_launcher)
     lang_source = schemas.LangSource(path=words_file, pre_computed={'5': pre_computed})
     conf = schemas.AppConfig.model_validate({
-        'service_id': 'wordle-test', 'version': '0.0.0-test', 'logging_level': 'INFO', 'data_folder': 'data/',
+        'service_id': 'wordle-test', 'logging_level': 'INFO', 'data_folder': 'data/',
         'MAX_SESSIONS': 5, 'SESSION_TTL_SECONDS': 1800,
     })
 
@@ -62,7 +62,7 @@ def test_save_and_load_round_trip_preserves_populated_letter_extractor(tmp_path:
     pre_computed = schemas.PrecomputedEntry(path=words_file, length=5, lang_launcher=lang_launcher)
     lang_source = schemas.LangSource(path=words_file, pre_computed={'5': pre_computed})
     conf = schemas.AppConfig.model_validate({
-        'service_id': 'wordle-test', 'version': '0.0.0-test', 'logging_level': 'INFO', 'data_folder': 'data/',
+        'service_id': 'wordle-test', 'logging_level': 'INFO', 'data_folder': 'data/',
         'MAX_SESSIONS': 5, 'SESSION_TTL_SECONDS': 1800,
     })
     app_sources = schemas.AppSources(config=conf, langs={'mini': lang_source}, game_modes={})

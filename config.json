@@ -1,6 +1,5 @@
 {
     "service_id": "wordle",
-    "version": "0.2.2",
     "logging_level": "INFO",
     "data_folder": "data/",
     "compute_best_opening": true,

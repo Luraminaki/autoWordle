@@ -40,7 +40,7 @@ _PROGRESS_POLL_INTERVAL_SECONDS = 1.0
 @route.get('/version')
 async def get_version() -> api_schemas.VersionResponse:
     """Report the running application version."""
-    return api_schemas.VersionResponse(status=statics.StatusFunction.SUCCESS, version=APP_SOURCES.config.version)
+    return api_schemas.VersionResponse(status=statics.StatusFunction.SUCCESS, version=paths.get_app_version())
 
 
 @route.get('/get_active_games')
