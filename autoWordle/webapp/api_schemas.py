@@ -63,6 +63,20 @@ class ResetGameSessionRequest(BaseModel):
     max_tries: int = Field(gt=0, default=6)
 
 
+class ResetGameSessionResponse(StatusResponse):
+    """Response body for `POST /reset_game_session`.
+
+    Includes the freshly-reset `session_stats` directly (same shape as
+    `GameSessionStatsResponse`) so callers don't need a second
+    `get_game_session_stats` round trip just to learn the state their own
+    reset request produced - collapsing what would otherwise be two
+    sequential calls (with a failure window between them: reset succeeds,
+    then the follow-up fetch fails, leaving the caller out of sync) into one.
+    """
+
+    session_stats: GameSessionMeta | None = None
+
+
 class DeleteGameSessionRequest(BaseModel):
     """Request body for `POST /delete_game_session`."""
 

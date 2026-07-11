@@ -42,6 +42,14 @@ logger = logging.getLogger(__name__)
 # (`vectorized_compendium._PROGRESS_LOG_INTERVAL_SECONDS`, 5s), with margin.
 _STALE_TIMEOUT_SECONDS = 30.0
 
+# A DONE/FAILED row untouched for longer than this is prunable - generous
+# margin over any realistic SSE-client polling delay, so no client can lose
+# its terminal status update, while still keeping precompute_jobs.sqlite from
+# accumulating rows forever across an app's lifetime. Public: api_views.py's
+# `/precompute` route calls prune_finished with this value, mirroring how
+# create_game_session calls SESSION_STORE.delete_expired.
+FINISHED_RETENTION_SECONDS = 3600.0
+
 
 @dataclasses.dataclass
 class PrecomputeJobStatus:
@@ -261,6 +269,61 @@ class PrecomputeJobStore:
 
         return PrecomputeJobStatus(lang=lang, word_length=word_length, status=statics.PrecomputeStatus(status),
                                    fraction_done=fraction_done, eta_seconds=eta_seconds, error=error, position=position)
+
+
+    def get_running_job(self) -> PrecomputeJobStatus | None:
+        """Look up whichever job is currently running, if any.
+
+        Lets a queued caller's SSE stream show *something* actively
+        progressing - proof the server hasn't hung - even though it isn't
+        their own job yet. Global concurrency is capped at 1 (see `request`),
+        so there is at most one to find.
+
+        Returns:
+            PrecomputeJobStatus | None: The running job's status, or `None`
+            if nothing is currently running (or the only 'running' row is
+            stale - effectively abandoned, not real progress).
+        """
+        now = time.time()
+
+        with self.lock:
+            row = self.db.execute(
+                'SELECT lang, word_length, fraction_done, eta_seconds, updated_timestamp FROM precompute_jobs '
+                + 'WHERE status = ? LIMIT 1', (statics.PrecomputeStatus.RUNNING.value,)).fetchone()
+
+            if row is None:
+                return None
+
+            lang, word_length, fraction_done, eta_seconds, updated_timestamp = row
+            if self._is_stale(updated_timestamp, now):
+                return None
+
+        return PrecomputeJobStatus(lang=lang, word_length=word_length, status=statics.PrecomputeStatus.RUNNING,
+                                   fraction_done=fraction_done, eta_seconds=eta_seconds, error='', position=None)
+
+
+    def prune_finished(self, retention_seconds: float) -> int:
+        """Delete DONE/FAILED rows whose last update is older than `retention_seconds`.
+
+        Mirrors `session_store.SessionStore.delete_expired`: called
+        explicitly by the route (not baked into `request()` - `self.lock`
+        isn't reentrant, see the note on the internal helpers above), so
+        every call to `/precompute` also lazily garbage-collects rows nobody
+        will ever query the terminal status of again.
+
+        Args:
+            retention_seconds (float): Age threshold, in seconds.
+
+        Returns:
+            int: Number of rows deleted.
+        """
+        now = time.time()
+
+        with self.lock, self.db:
+            cursor = self.db.execute(
+                'DELETE FROM precompute_jobs WHERE status IN (?, ?) AND (? - updated_timestamp) >= ?',
+                (statics.PrecomputeStatus.DONE.value, statics.PrecomputeStatus.FAILED.value, now, retention_seconds))
+            return cursor.rowcount
 
 
     def close(self) -> None:

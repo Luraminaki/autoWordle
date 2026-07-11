@@ -62,6 +62,11 @@ From the repository root, with the virtual environment activated:
 uvicorn autoWordle.main:app --reload
 ```
 
+Then open **http://127.0.0.1:8000/** in a browser to play - the same
+`uvicorn` process serves the frontend directly, nothing else to start or
+build. See [PLAYING THE GAME](README.md#playing-the-game) in the README for
+how the web UI itself works.
+
 The app reads `config.json` and the `data/` folder relative to the current
 working directory by default - run it from the repository root. To run it
 from elsewhere (or point it at a different config/data location entirely),
@@ -100,8 +105,14 @@ only; computing exhaustive data for them is `O(n**2)` in the word count and
 deliberately **not** triggered automatically (it would mean several minutes
 and multiple gigabytes of RAM on first boot for a dictionary that size).
 
-To precompute exhaustive data for a different word list/length, run once
-(this is slow the first time, then cached on disk):
+The easiest way to build it is from the running app itself: picking
+Solve/Assisted for a language/word length that doesn't have it yet shows a
+"Build solver data" button on the setup screen, with a live progress bar -
+no command line needed.
+
+The CLI below runs the same underlying build - useful for scripting, or for
+precomputing ahead of time without opening a browser. Run it once per
+word list/length (slow the first time, then cached on disk):
 
 ```bash
 python -c "from autoWordle.modules import helpers; helpers.LangLauncher('data/<file>.txt', compute_best_opening=True, word_length=<N>)"

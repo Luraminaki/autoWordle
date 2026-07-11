@@ -60,7 +60,7 @@ def client(test_app_root: pathlib.Path, monkeypatch: pytest.MonkeyPatch):
     """
     from fastapi.testclient import TestClient
 
-    from autoWordle.app import models, precompute_store, session_store
+    from autoWordle.app import models, precompute_store, rate_limiter, session_store
     from autoWordle.main import app
     from autoWordle.webapp import api_views
 
@@ -69,5 +69,13 @@ def client(test_app_root: pathlib.Path, monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr(api_views, 'APP_SOURCES', test_app_sources)
     monkeypatch.setattr(api_views, 'SESSION_STORE', session_store.SessionStore(test_app_root / 'sessions.sqlite', test_app_sources))
     monkeypatch.setattr(api_views, 'PRECOMPUTE_STORE', precompute_store.PrecomputeJobStore(test_app_root / 'precompute_jobs.sqlite'))
+    # Fresh limiters per test, same reason as the stores above: the module-level
+    # ones are process-global singletons built once at import time (against the
+    # real config.json's limits, at that), so without this, hit counts would
+    # leak across every test in the suite instead of resetting per test.
+    monkeypatch.setattr(api_views, 'DEFAULT_RATE_LIMITER',
+                        rate_limiter.RateLimiter(limit=test_app_sources.config.default_rate_limit_per_minute, window_seconds=60.0))
+    monkeypatch.setattr(api_views, 'PRECOMPUTE_RATE_LIMITER',
+                        rate_limiter.RateLimiter(limit=test_app_sources.config.precompute_rate_limit_per_minute, window_seconds=60.0))
 
     return TestClient(app)

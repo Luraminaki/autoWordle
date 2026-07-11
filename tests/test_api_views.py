@@ -4,6 +4,7 @@
 #===================================================================================================
 import json
 
+import pytest
 from fastapi.testclient import TestClient
 
 from autoWordle.modules import computing, statics
@@ -103,6 +104,30 @@ def test_max_sessions_limit_is_enforced(client: TestClient) -> None:
     assert statuses.count('ERROR') == 1
 
 
+def test_create_game_session_purges_expired_sessions_before_counting(client: TestClient) -> None:
+    from autoWordle.webapp import api_views
+
+    responses = [client.post('/api/app/create_game_session',
+                             json={'lang': 'mini', 'word_length': 5, 'max_tries': 6, 'game_mode': 'GAME_MODE_PLAY'})
+                 for _ in range(5)]  # fills MAX_SESSIONS
+    assert all(r.json()['status'] == 'SUCCESS' for r in responses)
+
+    # Backdate one session past the TTL directly in the store, without ever
+    # calling get_active_games (the only other place that purges) - this is
+    # exactly the scenario create_game_session must handle on its own now.
+    stale_uuid = responses[0].json()['session_uuid']
+    ttl_seconds = 1800  # matches conftest's SESSION_TTL_SECONDS
+    with api_views.SESSION_STORE.lock, api_views.SESSION_STORE.db:
+        _ = api_views.SESSION_STORE.db.execute(
+            'UPDATE sessions SET last_active_timestamp = last_active_timestamp - ? WHERE session_uuid = ?',
+            (ttl_seconds + 10, stale_uuid),
+        )
+
+    response = client.post('/api/app/create_game_session',
+                           json={'lang': 'mini', 'word_length': 5, 'max_tries': 6, 'game_mode': 'GAME_MODE_PLAY'})
+    assert response.json()['status'] == 'SUCCESS'
+
+
 def test_delete_game_session(client: TestClient) -> None:
     create = client.post('/api/app/create_game_session',
                          json={'lang': 'mini', 'word_length': 5, 'max_tries': 6, 'game_mode': 'GAME_MODE_PLAY'})
@@ -153,6 +178,35 @@ def test_precompute_builds_and_progress_reports_done(client: TestClient) -> None
     assert solve_after.json()['status'] == 'SUCCESS'
 
 
+def test_precompute_skips_when_already_done(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    from autoWordle.webapp import api_views
+
+    trigger = client.post('/api/app/precompute', json={'lang': 'mini', 'word_length': 5})
+    assert trigger.json()['job_status'] == 'running'  # already 'done' by the time this returns - see the test above
+
+    # Prove the short-circuit happens *before* ever reaching the job store,
+    # not just that the end result happens to look the same - a reclaim
+    # would also converge back to 'done' by the time TestClient's synchronous
+    # BackgroundTasks finish, so the response body alone can't distinguish
+    # "never touched" from "touched, then finished again".
+    calls = []
+    original_request = api_views.PRECOMPUTE_STORE.request
+
+    def counting_request(lang: str, word_length: int):
+        calls.append((lang, word_length))
+        return original_request(lang, word_length)
+
+    monkeypatch.setattr(api_views.PRECOMPUTE_STORE, 'request', counting_request)
+
+    response = client.post('/api/app/precompute', json={'lang': 'mini', 'word_length': 5})
+    body = response.json()
+
+    assert body['status'] == 'SUCCESS'
+    assert body['job_status'] == 'done'
+    assert body['queue_position'] is None
+    assert calls == []
+
+
 def test_precompute_duplicate_request_does_not_restart(client: TestClient) -> None:
     from autoWordle.webapp import api_views
 
@@ -170,6 +224,31 @@ def test_precompute_duplicate_request_does_not_restart(client: TestClient) -> No
     assert body['job_status'] == 'running'
 
 
+def test_precompute_prunes_finished_jobs_before_counting(client: TestClient) -> None:
+    from autoWordle.app import precompute_store
+    from autoWordle.webapp import api_views
+
+    # A finished job for an unrelated combo, backdated well past the
+    # retention window - the next /precompute call (for anything) should
+    # sweep it away as a lazy side effect, same pattern as
+    # create_game_session's expired-session purge.
+    old = api_views.PRECOMPUTE_STORE.request('mini', 9)
+    assert old.should_start is True
+    _ = api_views.PRECOMPUTE_STORE.mark_done('mini', 9)
+
+    with api_views.PRECOMPUTE_STORE.lock, api_views.PRECOMPUTE_STORE.db:
+        _ = api_views.PRECOMPUTE_STORE.db.execute(
+            'UPDATE precompute_jobs SET updated_timestamp = updated_timestamp - ? WHERE lang = ? AND word_length = ?',
+            (precompute_store.FINISHED_RETENTION_SECONDS + 10, 'mini', 9))
+
+    assert api_views.PRECOMPUTE_STORE.get_status('mini', 9) is not None
+
+    response = client.post('/api/app/precompute', json={'lang': 'mini', 'word_length': 5})
+    assert response.json()['status'] == 'SUCCESS'
+
+    assert api_views.PRECOMPUTE_STORE.get_status('mini', 9) is None
+
+
 def test_precompute_second_combo_queues_behind_running_job(client: TestClient) -> None:
     from autoWordle.webapp import api_views
 
@@ -182,6 +261,48 @@ def test_precompute_second_combo_queues_behind_running_job(client: TestClient) -
     assert body['status'] == 'SUCCESS'
     assert body['job_status'] == 'queued'
     assert body['queue_position'] == 1
+
+
+def test_precompute_progress_includes_current_job_when_queued(client: TestClient) -> None:
+    # Deliberately not read through the live SSE stream: a queued job that
+    # never resolves (mini/5 is never marked done/failed here) keeps
+    # `event_stream` looping forever, and draining a non-terminating
+    # StreamingResponse through TestClient hangs rather than allowing an
+    # early exit - call the payload-building helper directly instead.
+    from autoWordle.webapp import api_views
+
+    first = api_views.PRECOMPUTE_STORE.request('mini', 5)
+    assert first.should_start is True
+    api_views.PRECOMPUTE_STORE.update_progress('mini', 5, 0.42, 17.0)
+
+    second = api_views.PRECOMPUTE_STORE.request('mini', 6)
+    assert second.should_start is False
+    assert second.status.value == 'queued'
+
+    job = api_views.PRECOMPUTE_STORE.get_status('mini', 6)
+    payload = api_views._precompute_progress_payload(job)
+
+    assert payload['status'] == 'queued'
+    assert payload['current_job'] == {'lang': 'mini', 'word_length': 5, 'fraction_done': 0.42, 'eta_seconds': 17.0}
+
+
+def test_precompute_rate_limit_returns_429(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    from autoWordle.app import precompute_store
+    from autoWordle.webapp import api_views
+
+    # Mocked so this test is purely about the rate limiter dependency, not
+    # precompute's own business logic (already covered by the other
+    # precompute tests above) - keeps it fast and avoids running `limit`
+    # real background builds for word lengths mini.txt doesn't actually have.
+    monkeypatch.setattr(api_views.models, 'request_precompute', lambda *_a, **_kw: precompute_store.PrecomputeRequestResult(
+        status=statics.PrecomputeStatus.DONE, position=None, should_start=False))
+
+    limit = api_views.PRECOMPUTE_RATE_LIMITER.limit
+    responses = [client.post('/api/app/precompute', json={'lang': 'mini', 'word_length': 5 + i}) for i in range(limit + 1)]
+
+    assert all(r.status_code == 200 for r in responses[:limit])
+    assert responses[limit].status_code == 429
+    assert 'Too many requests' in responses[limit].json()['detail']
 
 
 def test_precompute_rejects_unknown_language(client: TestClient) -> None:

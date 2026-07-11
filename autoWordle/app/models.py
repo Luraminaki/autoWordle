@@ -287,6 +287,16 @@ def request_precompute(app_sources: schemas.AppSources, job_store: precompute_st
     `run_precompute_job`) re-reads `app_sources` itself once it actually
     runs, since a queued request might sit for a while before that happens.
 
+    Short-circuits before ever touching `job_store` if `lang`/`word_length`
+    already has real exhaustive data loaded. Without this, a request for an
+    already-complete combination would still fall through to
+    `job_store.request`, which treats a `done` row as reclaimable the same
+    as a `failed` one - triggering a pointless (if cheap, since
+    `LangLauncher` itself skips recomputing when its sidecar files already
+    exist) `running -> done` cycle. The normal UI never causes this (the
+    "Build solver data" button is hidden once data is available), but a
+    direct API caller could otherwise hit it.
+
     Args:
         app_sources (schemas.AppSources): Assembled application sources.
         job_store (precompute_store.PrecomputeJobStore): Precompute job store.
@@ -302,6 +312,10 @@ def request_precompute(app_sources: schemas.AppSources, job_store: precompute_st
     """
     if lang not in app_sources.langs:
         raise PrecomputeNotAllowedError(f'Unknown language {lang!r}')
+
+    precomputed = app_sources.langs[lang].pre_computed.get(str(word_length))
+    if precomputed is not None and precomputed.lang_launcher is not None and precomputed.lang_launcher.words_information:
+        return precompute_store.PrecomputeRequestResult(status=statics.PrecomputeStatus.DONE, position=None, should_start=False)
 
     return job_store.request(lang, word_length)
 

@@ -1,0 +1,657 @@
+:root {
+  --bg: #ffffff;
+  --fg: #1a1a1b;
+  --fg-muted: #565758;
+  --border: #d3d6da;
+  --border-strong: #878a8c;
+  --surface: #f6f6f7;
+  --accent: #3a86ff;
+  --danger: #d32f2f;
+
+  --tile-miss: #787c7e;
+  --tile-misplaced: #c9b458;
+  --tile-exact: #6aaa64;
+  --tile-fg: #ffffff;
+
+  --key-bg: #d3d6da;
+  --key-fg: #1a1a1b;
+
+  --radius: 8px;
+  --font: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+
+  /* Unitless so JS can read it via getComputedStyle without parsing "500ms" vs
+     "0.5s" - board.js's reveal-sequencing timeout reads this instead of
+     duplicating the number, so the two can't drift out of sync. */
+  --tile-reveal-ms: 500;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #121213;
+    --fg: #ffffff;
+    --fg-muted: #9aa0a6;
+    --border: #3a3a3c;
+    --border-strong: #565758;
+    --surface: #1e1f20;
+    --tile-miss: #3a3a3c;
+    --tile-misplaced: #b59f3b;
+    --tile-exact: #538d4e;
+    --key-bg: #818384;
+    --key-fg: #ffffff;
+  }
+}
+
+/* Explicit overrides for the manual theme toggle (theme.js) - these win
+   regardless of system preference, unlike the media query above, which is
+   only ever consulted when no explicit choice ('auto') is stored. */
+:root[data-theme="dark"] {
+  --bg: #121213;
+  --fg: #ffffff;
+  --fg-muted: #9aa0a6;
+  --border: #3a3a3c;
+  --border-strong: #565758;
+  --surface: #1e1f20;
+  --tile-miss: #3a3a3c;
+  --tile-misplaced: #b59f3b;
+  --tile-exact: #538d4e;
+  --key-bg: #818384;
+  --key-fg: #ffffff;
+}
+
+:root[data-theme="light"] {
+  --bg: #ffffff;
+  --fg: #1a1a1b;
+  --fg-muted: #565758;
+  --border: #d3d6da;
+  --border-strong: #878a8c;
+  --surface: #f6f6f7;
+  --tile-miss: #787c7e;
+  --tile-misplaced: #c9b458;
+  --tile-exact: #6aaa64;
+  --key-bg: #d3d6da;
+  --key-fg: #1a1a1b;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+/* Screen-reader-only: content stays in the accessibility tree (unlike
+   `hidden`/`display:none`, which remove it) but is invisible and takes no
+   layout space. */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  min-height: 100%;
+}
+
+body {
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+button,
+select,
+input {
+  font-family: inherit;
+  font-size: 1rem;
+}
+
+button {
+  cursor: pointer;
+  border: 1px solid var(--border-strong);
+  background: var(--surface);
+  color: var(--fg);
+  border-radius: var(--radius);
+  padding: 0.65rem 1.1rem;
+  min-height: 44px;
+}
+
+button:hover:not(:disabled) {
+  border-color: var(--accent);
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+button.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+select,
+input[type="number"],
+input[type="text"] {
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  background: var(--bg);
+  color: var(--fg);
+  padding: 0.6rem 0.7rem;
+  min-height: 44px;
+}
+
+/* ---------------------------------------------------------------- header */
+
+#app-header {
+  width: 100%;
+  max-width: 640px;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  padding: 1rem;
+  border-bottom: 1px solid var(--border);
+}
+
+#app-header h1 {
+  font-size: 1.4rem;
+  margin: 0;
+  letter-spacing: 0.02em;
+}
+
+#app-header .meta {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.75rem;
+  color: var(--fg-muted);
+}
+
+#app-header .meta button {
+  padding: 0.2rem 0.6rem;
+  min-height: 0;
+  font-size: 0.75rem;
+}
+
+main {
+  width: 100%;
+  max-width: 640px;
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+}
+
+[hidden] {
+  display: none !important;
+}
+
+/* ---------------------------------------------------------------- setup screen */
+
+.card {
+  width: 100%;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1rem;
+}
+
+.field-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  min-width: 0;
+}
+
+/* Max tries doesn't need to fill a whole grid track when it's alone on a
+   wrapped row - without this it stretches into an oversized, disconnected-
+   looking bar under the other fields. */
+.field.narrow {
+  max-width: 160px;
+}
+
+.field label {
+  font-size: 0.8rem;
+  color: var(--fg-muted);
+}
+
+.error-text {
+  color: var(--danger);
+  font-size: 0.9rem;
+  margin-top: 0.5rem;
+}
+
+.hint-text {
+  color: var(--fg-muted);
+  font-size: 0.85rem;
+}
+
+#precompute-panel {
+  margin-top: 0.75rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--border);
+}
+
+.progress-bar {
+  width: 100%;
+  height: 10px;
+  background: var(--border);
+  border-radius: 5px;
+  overflow: hidden;
+  margin: 0.5rem 0;
+}
+
+.progress-bar > div {
+  height: 100%;
+  background: var(--accent);
+  width: 0%;
+  transition: width 0.3s ease;
+}
+
+#resume-panel {
+  margin-top: 0.75rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--border);
+}
+
+#resume-uuid {
+  font-family: monospace;
+}
+
+/* ---------------------------------------------------------------- game header */
+
+.game-toolbar {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.game-toolbar .badges {
+  display: flex;
+  gap: 0.5rem;
+  font-size: 0.8rem;
+  color: var(--fg-muted);
+  flex-wrap: wrap;
+}
+
+.badge {
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 0.15rem 0.6rem;
+}
+
+.game-toolbar .actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.session-id-row {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  font-size: 0.8rem;
+}
+
+.session-id-row code {
+  font-family: monospace;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 0.15rem 0.4rem;
+  color: var(--fg);
+  user-select: all;
+}
+
+.session-id-row button {
+  padding: 0.25rem 0.6rem;
+  min-height: 0;
+  font-size: 0.75rem;
+}
+
+.banner {
+  width: 100%;
+  text-align: center;
+  padding: 0.75rem;
+  border-radius: var(--radius);
+  font-weight: 600;
+}
+
+.banner.win {
+  background: var(--tile-exact);
+  color: var(--tile-fg);
+}
+
+.banner.lose {
+  background: var(--tile-miss);
+  color: var(--tile-fg);
+}
+
+#file-protocol-warning {
+  max-width: 640px;
+  margin: 1rem auto 0;
+  line-height: 1.5;
+}
+
+#file-protocol-warning code {
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 4px;
+  padding: 0.1rem 0.35rem;
+  font-size: 0.9em;
+}
+
+/* ---------------------------------------------------------------- board */
+
+#board {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.board-row {
+  display: flex;
+  gap: 5px;
+}
+
+.board-row.shake {
+  animation: shake 0.5s;
+}
+
+.tile {
+  width: 52px;
+  height: 52px;
+  border: 2px solid var(--border);
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.6rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--fg);
+}
+
+.tile.filled {
+  border-color: var(--border-strong);
+}
+
+.tile.reveal {
+  animation: flip calc(var(--tile-reveal-ms) * 1ms) ease forwards;
+}
+
+.tile.status-1 {
+  background: var(--tile-miss);
+  border-color: var(--tile-miss);
+  color: var(--tile-fg);
+}
+
+.tile.status-2 {
+  background: var(--tile-misplaced);
+  border-color: var(--tile-misplaced);
+  color: var(--tile-fg);
+}
+
+.tile.status-3 {
+  background: var(--tile-exact);
+  border-color: var(--tile-exact);
+  color: var(--tile-fg);
+}
+
+.tile.win-pop {
+  animation: pop 0.3s ease;
+}
+
+@keyframes shake {
+  10%,
+  90% {
+    transform: translateX(-2px);
+  }
+  20%,
+  80% {
+    transform: translateX(4px);
+  }
+  30%,
+  50%,
+  70% {
+    transform: translateX(-8px);
+  }
+  40%,
+  60% {
+    transform: translateX(8px);
+  }
+}
+
+@keyframes flip {
+  0% {
+    transform: rotateX(0deg);
+  }
+  50% {
+    transform: rotateX(90deg);
+  }
+  100% {
+    transform: rotateX(0deg);
+  }
+}
+
+@keyframes pop {
+  0% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.1);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+/* ---------------------------------------------------------------- keyboard */
+
+#keyboard {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+  max-width: 500px;
+}
+
+.keyboard-row {
+  display: flex;
+  justify-content: center;
+  gap: 5px;
+}
+
+.key {
+  flex: 1;
+  max-width: 42px;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  background: var(--key-bg);
+  color: var(--key-fg);
+  border: none;
+  font-weight: 600;
+  text-transform: uppercase;
+  padding: 0;
+  font-size: 0.85rem;
+}
+
+.key.wide {
+  max-width: 62px;
+  font-size: 0.7rem;
+}
+
+.key.status-1 {
+  background: var(--tile-miss);
+  color: var(--tile-fg);
+}
+
+.key.status-2 {
+  background: var(--tile-misplaced);
+  color: var(--tile-fg);
+}
+
+.key.status-3 {
+  background: var(--tile-exact);
+  color: var(--tile-fg);
+}
+
+/* ---------------------------------------------------------------- hints panel */
+
+#hints-panel {
+  width: 100%;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+#hints-panel h3 {
+  margin: 0 0 0.25rem;
+  font-size: 0.95rem;
+}
+
+.hints-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.85rem;
+}
+
+.chip-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.chip {
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 0.15rem 0.55rem;
+  font-size: 0.8rem;
+}
+
+.chip strong {
+  color: var(--accent);
+}
+
+.elimination-group h4 {
+  margin: 0.35rem 0 0.15rem;
+  font-size: 0.8rem;
+  color: var(--fg-muted);
+  font-weight: 500;
+}
+
+/* ---------------------------------------------------------------- solve screen */
+
+.solve-input-row {
+  display: flex;
+  gap: 5px;
+}
+
+.solve-letter {
+  width: 52px;
+  height: 52px;
+  text-align: center;
+  font-size: 1.6rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  padding: 0;
+}
+
+.solve-pattern-row {
+  display: flex;
+  gap: 5px;
+}
+
+.pattern-tile {
+  width: 52px;
+  height: 52px;
+  border-radius: 4px;
+  border: 2px solid var(--border-strong);
+  background: var(--tile-miss);
+  color: var(--tile-fg);
+}
+
+.pattern-tile.status-2 {
+  background: var(--tile-misplaced);
+}
+
+.pattern-tile.status-3 {
+  background: var(--tile-exact);
+}
+
+#solve-history {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.solve-history-row {
+  display: flex;
+  gap: 5px;
+}
+
+/* ---------------------------------------------------------------- toast */
+
+#toast {
+  position: fixed;
+  bottom: 1.5rem;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--fg);
+  color: var(--bg);
+  padding: 0.6rem 1rem;
+  border-radius: var(--radius);
+  font-size: 0.9rem;
+  z-index: 10;
+}
+
+@media (max-width: 420px) {
+  .tile,
+  .solve-letter,
+  .pattern-tile {
+    width: 44px;
+    height: 44px;
+    font-size: 1.3rem;
+  }
+
+  .key {
+    height: 44px;
+    max-width: 34px;
+  }
+
+  .keyboard-row {
+    gap: 3px;
+  }
+
+  .board-row {
+    gap: 3px;
+  }
+}

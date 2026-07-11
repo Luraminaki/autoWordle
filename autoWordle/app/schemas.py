@@ -39,6 +39,10 @@ class AppConfig(BaseModel):
     compute_best_opening: bool = False
     max_sessions: int = Field(alias='MAX_SESSIONS', gt=0)
     session_ttl_seconds: int = Field(alias='SESSION_TTL_SECONDS', gt=0)
+    # Defaulted (not required) so existing config.json files keep working
+    # unchanged - these are new knobs, not a breaking change to the schema.
+    default_rate_limit_per_minute: int = Field(alias='DEFAULT_RATE_LIMIT_PER_MINUTE', gt=0, default=60)
+    precompute_rate_limit_per_minute: int = Field(alias='PRECOMPUTE_RATE_LIMIT_PER_MINUTE', gt=0, default=5)
     # Word lengths a `LangLauncher` is always built for, on top of any
     # already precomputed (`*_info.csv`-marked) lengths discovered on disk.
     # Without this, a fresh install with no precomputed sidecars yet would

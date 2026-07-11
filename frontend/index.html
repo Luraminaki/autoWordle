@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <script>
+    // Applies a stored manual theme choice before the stylesheet below
+    // paints anything - the "real" logic lives in js/theme.js, but that's a
+    // deferred module script that wouldn't run in time to avoid a flash of
+    // the wrong theme, so this duplicates just the read+apply step inline
+    // (same reasoning as the file-protocol check further down).
+    try {
+      const theme = localStorage.getItem('autowordle.theme');
+      if (theme === 'light' || theme === 'dark') document.documentElement.dataset.theme = theme;
+    } catch {
+      // best-effort - falls back to the prefers-color-scheme media query
+    }
+  </script>
+  <title>autoWordle</title>
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#3a86ff">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div id="sr-announcer" class="visually-hidden" role="status" aria-live="polite"></div>
+
+  <div id="file-protocol-warning" class="banner lose" role="alert" hidden>
+    This page needs to be served by the autoWordle backend, not opened as a local file -
+    open the URL where that server is running instead (for local development, that's
+    usually what <code>uvicorn autoWordle.main:app --reload</code> prints when you start it).
+  </div>
+  <script>
+    // Plain classic script, not type="module": browsers block module scripts entirely
+    // under file:// (CORS on the module fetch itself, before any app code can run), so
+    // this is the only thing that can reliably warn the user in that specific case.
+    if (location.protocol === 'file:') {
+      document.getElementById('file-protocol-warning').hidden = false;
+    }
+  </script>
+
+  <header id="app-header">
+    <h1>autoWordle</h1>
+    <div class="meta">
+      <span class="badge" id="meta-version"></span>
+      <span class="badge" id="meta-active-games"></span>
+      <button id="theme-toggle" type="button" title="Cycle the color theme (auto/light/dark)"></button>
+    </div>
+  </header>
+
+  <main>
+    <section id="screen-setup" class="card">
+      <h2>New game</h2>
+
+      <div class="field-row">
+        <div class="field">
+          <label for="setup-lang">Language</label>
+          <select id="setup-lang"></select>
+        </div>
+        <div class="field">
+          <label for="setup-length">Word length</label>
+          <select id="setup-length"></select>
+        </div>
+        <div class="field">
+          <label for="setup-mode">Mode</label>
+          <select id="setup-mode"></select>
+        </div>
+        <div class="field narrow">
+          <label for="setup-tries">Max tries</label>
+          <input id="setup-tries" type="number" min="1">
+        </div>
+      </div>
+
+      <button id="setup-start" class="primary">Start</button>
+      <div id="setup-error" class="error-text" role="alert" hidden></div>
+
+      <div id="precompute-panel" hidden>
+        <p class="hint-text">Solver data isn't built yet for this language/word length combination.</p>
+        <button id="precompute-start">Build solver data</button>
+        <div class="progress-bar" id="precompute-progress-bar" hidden>
+          <div id="precompute-progress-fill"></div>
+        </div>
+        <p class="hint-text" id="precompute-status" role="status" aria-live="polite"></p>
+      </div>
+
+      <div id="resume-panel">
+        <p class="hint-text">
+          If your browser parameters are set to not keep you signed into a session
+          across restarts, and if you saved a session ID, paste it here to jump back in.
+        </p>
+        <div class="field-row">
+          <div class="field">
+            <label for="resume-uuid">Session ID</label>
+            <input id="resume-uuid" type="text" placeholder="Paste a session ID">
+          </div>
+        </div>
+        <button id="resume-start">Resume</button>
+        <div id="resume-error" class="error-text" role="alert" hidden></div>
+      </div>
+    </section>
+
+    <section id="screen-game" hidden>
+      <div class="game-toolbar">
+        <div class="badges">
+          <span class="badge" id="game-badge-mode"></span>
+          <span class="badge" id="game-badge-lang"></span>
+          <span class="badge" id="game-badge-tries"></span>
+        </div>
+        <div class="actions">
+          <button id="game-keyboard-layout" title="Switch the on-screen keyboard layout">QWERTY</button>
+          <button id="game-reset">Reset</button>
+          <button id="game-new">New Game</button>
+        </div>
+      </div>
+
+      <div class="session-id-row">
+        <span class="hint-text">Session ID:</span>
+        <code id="game-session-id"></code>
+        <button id="game-copy-session-id" type="button" title="Copy session ID to clipboard">Copy</button>
+      </div>
+
+      <div id="game-banner" class="banner" role="alert" hidden></div>
+
+      <div id="board"></div>
+      <div id="keyboard"></div>
+
+      <div id="hints-panel" hidden></div>
+    </section>
+
+    <section id="screen-solve" hidden>
+      <div class="game-toolbar">
+        <div class="badges">
+          <span class="badge" id="solve-badge-lang"></span>
+        </div>
+        <div class="actions">
+          <button id="solve-new">New Game</button>
+        </div>
+      </div>
+
+      <div class="session-id-row">
+        <span class="hint-text">Session ID:</span>
+        <code id="solve-session-id"></code>
+        <button id="solve-copy-session-id" type="button" title="Copy session ID to clipboard">Copy</button>
+      </div>
+
+      <div id="solve-history"></div>
+
+      <div class="solve-input-row" id="solve-input-row"></div>
+      <div class="solve-pattern-row" id="solve-pattern-row"></div>
+      <button id="solve-submit" class="primary">Submit</button>
+      <div id="solve-error" class="error-text" role="alert" hidden></div>
+
+      <div id="solve-hints-panel" hidden></div>
+    </section>
+  </main>
+
+  <div id="toast" role="status" aria-live="polite" hidden></div>
+
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>

@@ -3,11 +3,11 @@
 Ever heard of [Wordle](https://en.wikipedia.org/wiki/Wordle)? No? And here I though I was living under a rock... Anyway, for some reasons, 2 years after watching [3b1b](https://www.3blue1brown.com/lessons/wordle)'s video about it, that topic decided to crawl its way up from the depth of my memory.
 
 I had a couple of goals this time around:
-- Try to make an "efficient" solver
-- Allow some room for customisation (word length, language, number of tries)
-- Make it a WebApp that can handle multiple sessions
+- Try to make an "efficient" solver (reasonably fast, with a low impact on the RAM, and reasonably accurate)
+- Allow some room for customisation (word length, language, number of tries, game modes, ...)
+- Make it a WebApp that can handle multiple sessions (using pure HTML, CSS, JS to avoid extra dependencies and the need to maintain them every other month)
 
-It's still a "work in progress" as of now... And there is a lot of room for improvement. A pure JS/HTML/CSS frontend is planned but not built yet - see `frontend/`, currently empty and reserved for it.
+It's still a "work in progress" as of now... And there is a lot of room for improvement.
 
 ## TABLE OF CONTENT
 
@@ -21,31 +21,13 @@ It's still a "work in progress" as of now... And there is a lot of room for impr
   - [PROJECT LAYOUT](#project-layout)
   - [API](#api)
   - [INSTALLATION](#installation)
+  - [PLAYING THE GAME](#playing-the-game)
 
 <!-- /TOC -->
 
 ## VERSIONS
 
-- 0.1.0-alpha: First release
-- 0.2.0: Backend refresh - package restructure, Pydantic-based API contracts,
-  several bugfixes (see below), SQLite/multiprocessing optimizations, ruff
-  linting, a real pytest suite, `pyproject.toml` packaging, real `logging`
-  (rotating file + console) instead of bare `print()`, and SQLite-backed
-  session persistence (survives restarts, safe across multiple workers)
-  instead of a process-local in-memory dict.
-  Pattern-compendium precomputation now streams straight to the
-  SQLite cache instead of materializing the full `O(n**2)` compendium in
-  memory first, and computes each guess's patterns against the whole pool as
-  a batch of vectorized numpy array operations instead of one Python call per
-  pair - ~10x lower peak RSS and ~2x faster at real dictionary scale (see
-  [THE SOLVER](#the-solver)). Also fixes a scoring bug in `compute_pattern`
-  for guesses with a repeated letter where one occurrence is an exact match
-  (e.g. guessing "jelly" against "allay" incorrectly scored the second "l" as
-  black instead of yellow) - existing precomputed sidecars need regenerating.
-- 0.2.2: Exhaustive-data precomputation can now be triggered on demand
-  through the API (`POST /precompute`) instead of only at process startup or
-  via a manual CLI command, with live progress/ETA over Server-Sent Events
-  (`GET /precompute_progress`) - see [THE SOLVER](#the-solver).
+See [CHANGELOG.md](CHANGELOG.md) for the full version history.
 
 ## ARCHITECTURE
 
@@ -54,9 +36,10 @@ sessions are persisted to a SQLite file (`data/sessions.sqlite`, WAL mode -
 the same approach already used for the pattern-compendium cache), not an
 in-memory dict, so they survive app restarts and work correctly across
 multiple `uvicorn` workers; they're garbage-collected after
-`SESSION_TTL_SECONDS` of inactivity (see `config.json`). A frontend isn't
-built yet; in the meantime the app serves whatever it finds at
-`frontend/.output/public/` as static files, if present.
+`SESSION_TTL_SECONDS` of inactivity (see `config.json`). The app serves
+`frontend/` as static files, if present - a plain HTML/CSS/JS app with no
+build step (native ES modules), so nothing needs installing or compiling to
+run it.
 
 Logging goes through the stdlib `logging` module (rotating file +
 console, configured once in `autoWordle/app/logging_utils.py` from
@@ -64,6 +47,14 @@ console, configured once in `autoWordle/app/logging_utils.py` from
 includes `%(funcName)s`, so there's no need for the
 `inspect.currentframe().f_code.co_name` dance the codebase used to do just to
 know which function logged a message.
+
+Every API route is rate-limited per client IP (an in-memory sliding window,
+independent per `uvicorn` worker - it's blunting abusive bursts, not
+metering an exact global quota) - `DEFAULT_RATE_LIMIT_PER_MINUTE` (default
+`60`) for the API as a whole, and a stricter `PRECOMPUTE_RATE_LIMIT_PER_MINUTE`
+(default `5`) specifically for `POST /precompute`, since a build can run for
+minutes of real CPU time. Both are optional `config.json` keys; omitting them
+keeps the defaults.
 
 ```
 autoWordle/                  # the installable package
@@ -152,7 +143,8 @@ above for whichever language/word length was requested.
   - `profiling/read_profile.py`: generic cProfile `.prof` report reader/summarizer
 - `tests/` - pytest suite, runs against a tiny synthetic word list
   (`tests/data/mini.txt`), never the real `data/` files
-- `frontend/` - reserved, empty; pure JS/HTML/CSS frontend planned
+- `frontend/` - pure JS/HTML/CSS frontend, no build step; served directly by
+  the backend (see [ARCHITECTURE](#architecture))
 
 ## API
 
@@ -178,3 +170,49 @@ docs are served at `/docs` once the app is running. Every response has a
 ## INSTALLATION
 
 See [INSTALL.md](INSTALL.md) for Windows/Debian/Ubuntu/Arch setup instructions.
+
+## PLAYING THE GAME
+
+Once the app is running (see [INSTALL.md](INSTALL.md#running-the-app)), open
+`http://127.0.0.1:8000/` (or wherever the server is bound) in a browser -
+the backend serves the frontend directly, nothing else to start or build.
+
+**Setup screen**: pick a language, word length, game mode, and max tries,
+then Start.
+- `GAME_MODE_PLAY`: the classic game - guess the hidden word within the
+  allotted tries.
+- `GAME_MODE_ASSISTED`: same as Play, plus a live solver-hints panel
+  (candidates remaining, best next guess, elimination suggestions) after
+  every guess.
+- `GAME_MODE_SOLVE`: for solving an *external* puzzle (paper, another site,
+  a friend) rather than one this app generated - enter a guess and manually
+  set the pattern it produced, and the solver narrows the candidate pool
+  down for you from there.
+
+Solve/Assisted need the exhaustive solver data described in
+[THE SOLVER](#the-solver). If it isn't built yet for the language/word
+length picked, the setup screen offers a "Build solver data" button with a
+live progress bar instead of blocking Start outright - the same job as
+`POST /precompute` (see [API](#api)).
+
+**Sessions** persist across page reloads via the browser's `localStorage`,
+and are resumed automatically. If the browser doesn't keep that (e.g.
+cleared on close), every game screen shows its session ID with a copy
+button - paste it into the "Resume a session" box on the setup screen to
+pick up where you left off, as long as the session itself hasn't since
+expired (`SESSION_TTL_SECONDS` in `config.json`, 30 minutes of inactivity
+by default).
+
+The on-screen keyboard (Play/Assisted) can be toggled between QWERTY and
+AZERTY layouts - purely cosmetic rearrangement of the clickable keys;
+physical typing already follows whatever layout the OS/keyboard is set to,
+regardless of this toggle.
+
+The `Theme: Auto/Light/Dark` button in the header cycles a manual color
+theme override, stacked on top of the automatic `prefers-color-scheme`
+detection (`Auto`, the default, always follows the OS/browser setting). The
+choice persists in `localStorage` across reloads. The app is also
+installable (manifest + icon, `frontend/manifest.json`) via the browser's
+"Install app"/"Add to Home Screen" prompt, for quicker launching - it still
+needs the backend to be reachable to do anything, so this isn't offline
+support.
