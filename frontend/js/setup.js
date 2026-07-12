@@ -5,6 +5,7 @@ import { getVersion, getActiveGames, getAppSources, createGameSession, getGameSe
 import { runPrecompute } from './precompute.js';
 import { GameMode, formatModeLabel } from './statics.js';
 import { saveSession } from './storage.js';
+import { showToast } from './toast.js';
 
 const DEFAULT_MAX_TRIES = 6;
 
@@ -118,9 +119,10 @@ async function refreshMeta() {
     const [version, activeGames] = await Promise.all([getVersion(), getActiveGames()]);
     el.version.textContent = version.version ? `v${version.version}` : '';
     el.activeGames.textContent = `${activeGames.active_games} active game(s)`;
-  } catch {
+  } catch (err) {
     el.version.textContent = '';
     el.activeGames.textContent = '';
+    showToast(`Could not reach the server (${err.message})`);
   }
 }
 
@@ -231,14 +233,19 @@ export function mountSetup(callback) {
   });
 
   el.precomputeStart.addEventListener('click', () => {
+    // Captured now, not read live from the selects in onDone below - the
+    // user can change the dropdowns while a build is running, and onDone
+    // must still refer to the combo that was actually just built, not
+    // whatever happens to be selected by the time it finishes.
+    const builtSelection = currentSelection();
     el.precomputeStart.disabled = true;
-    runPrecompute(el.lang.value, Number(el.length.value), {
+    runPrecompute(builtSelection.lang, Number(builtSelection.length), {
       barEl: el.progressBar,
       fillEl: el.progressFill,
       statusEl: el.precomputeStatus,
       onDone: async () => {
         el.precomputeStart.disabled = false;
-        await refreshSetup(currentSelection());
+        await refreshSetup(builtSelection);
       },
       onError: (message) => {
         el.precomputeStart.disabled = false;

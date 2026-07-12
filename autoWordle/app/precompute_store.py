@@ -32,14 +32,15 @@ import sqlite3
 import time
 from threading import Lock
 
-from autoWordle.modules import statics
+from autoWordle.modules import sqlite_utils, statics
 
 logger = logging.getLogger(__name__)
 
 # A 'running' row untouched for longer than this is assumed abandoned (the
 # worker that owned it crashed/restarted) and can be reclaimed by a fresh
-# request - roughly 2x the compute loop's own progress-heartbeat interval
-# (`vectorized_compendium._PROGRESS_LOG_INTERVAL_SECONDS`, 5s), with margin.
+# request - 6x the compute loop's own progress-heartbeat interval
+# (`vectorized_compendium._PROGRESS_LOG_INTERVAL_SECONDS`, 5s), a generous
+# margin against a slow-but-still-alive build being mistaken for abandoned.
 _STALE_TIMEOUT_SECONDS = 30.0
 
 # A DONE/FAILED row untouched for longer than this is prunable - generous
@@ -84,14 +85,9 @@ class PrecomputeJobStore:
         """
         self.db_path: str = str(db_path)
         self.lock: _thread.LockType = Lock()
-        self.db: sqlite3.Connection = sqlite3.connect(self.db_path, timeout=5.0, isolation_level=None, check_same_thread=False)
+        self.db: sqlite3.Connection = sqlite_utils.open_connection(self.db_path)
 
-        with self.lock:
-            _ = self.db.execute('PRAGMA journal_mode=WAL')
-            _ = self.db.execute('PRAGMA synchronous=NORMAL')
-            _ = self.db.execute('PRAGMA busy_timeout=5000')
-
-            with self.db:
+        with self.lock, self.db:
                 _ = self.db.execute('''
                     CREATE TABLE IF NOT EXISTS precompute_jobs (
                         lang TEXT NOT NULL,
@@ -122,17 +118,27 @@ class PrecomputeJobStore:
             (statics.PrecomputeStatus.RUNNING.value, lang, word_length)).fetchall()
         return any(not self._is_stale(updated_timestamp, now) for (updated_timestamp,) in rows)
 
-    def _queue_position(self, created_timestamp: float) -> int:
-        """1-indexed position among queued jobs, ordered by `created_timestamp`."""
+    def _queue_position(self, created_timestamp: float, lang: str, word_length: int) -> int:
+        """1-indexed position among queued jobs, ordered by `(created_timestamp, rowid)`.
+
+        `rowid` is an explicit tie-breaker for equal timestamps - real on a
+        coarse-resolution clock (e.g. Windows' `time.time()` can have ~15.6ms
+        granularity), two requests for different combos landing within the
+        same tick would otherwise both report the same position, and that
+        order wouldn't necessarily match what `_claim_next_queued` actually
+        processes them in.
+        """
         count_ahead = self.db.execute(
-            'SELECT COUNT(*) FROM precompute_jobs WHERE status = ? AND created_timestamp < ?',
-            (statics.PrecomputeStatus.QUEUED.value, created_timestamp)).fetchone()[0]
+            'SELECT COUNT(*) FROM precompute_jobs WHERE status = ? AND '
+            '(created_timestamp < ? OR (created_timestamp = ? AND rowid < ('
+            'SELECT rowid FROM precompute_jobs WHERE lang = ? AND word_length = ?)))',
+            (statics.PrecomputeStatus.QUEUED.value, created_timestamp, created_timestamp, lang, word_length)).fetchone()[0]
         return count_ahead + 1
 
     def _claim_next_queued(self) -> tuple[str, int] | None:
         """Atomically claim the oldest queued job, if any, marking it running."""
         row = self.db.execute(
-            'SELECT lang, word_length FROM precompute_jobs WHERE status = ? ORDER BY created_timestamp ASC LIMIT 1',
+            'SELECT lang, word_length FROM precompute_jobs WHERE status = ? ORDER BY created_timestamp ASC, rowid ASC LIMIT 1',
             (statics.PrecomputeStatus.QUEUED.value,)).fetchone()
         if row is None:
             return None
@@ -162,9 +168,9 @@ class PrecomputeJobStore:
             combination is already queued or running; the caller should
             subscribe to its progress instead of starting a duplicate.
         """
-        now = time.time()
-
         with self.lock, self.db:
+            now = time.time()
+
             row = self.db.execute(
                 'SELECT status, created_timestamp, updated_timestamp FROM precompute_jobs WHERE lang = ? AND word_length = ?',
                 (lang, word_length)).fetchone()
@@ -175,7 +181,8 @@ class PrecomputeJobStore:
                     status == statics.PrecomputeStatus.RUNNING.value and self._is_stale(updated_timestamp, now))
 
                 if not is_reclaimable:
-                    position = self._queue_position(created_timestamp) if status == statics.PrecomputeStatus.QUEUED.value else None
+                    position = (self._queue_position(created_timestamp, lang, word_length)
+                               if status == statics.PrecomputeStatus.QUEUED.value else None)
                     return PrecomputeRequestResult(status=statics.PrecomputeStatus(status), position=position, should_start=False)
 
             can_run_now = not self._has_other_active_job(now, lang, word_length)
@@ -189,7 +196,7 @@ class PrecomputeJobStore:
                     created_timestamp = excluded.created_timestamp, updated_timestamp = excluded.updated_timestamp
             ''', (lang, word_length, new_status.value, now, now))
 
-            position = self._queue_position(now) if new_status == statics.PrecomputeStatus.QUEUED else None
+            position = self._queue_position(now, lang, word_length) if new_status == statics.PrecomputeStatus.QUEUED else None
             return PrecomputeRequestResult(status=new_status, position=position, should_start=can_run_now)
 
 
@@ -265,7 +272,8 @@ class PrecomputeJobStore:
                 return None
 
             status, fraction_done, eta_seconds, error, created_timestamp = row
-            position = self._queue_position(created_timestamp) if status == statics.PrecomputeStatus.QUEUED.value else None
+            position = (self._queue_position(created_timestamp, lang, word_length)
+                       if status == statics.PrecomputeStatus.QUEUED.value else None)
 
         return PrecomputeJobStatus(lang=lang, word_length=word_length, status=statics.PrecomputeStatus(status),
                                    fraction_done=fraction_done, eta_seconds=eta_seconds, error=error, position=position)
@@ -365,10 +373,10 @@ class PrecomputeJobStore:
         now = time.time()
 
         with self.lock, self.db:
-            cursor = self.db.execute(
-                'DELETE FROM precompute_jobs WHERE status IN (?, ?) AND (? - updated_timestamp) >= ?',
-                (statics.PrecomputeStatus.DONE.value, statics.PrecomputeStatus.FAILED.value, now, retention_seconds))
-            return cursor.rowcount
+            return sqlite_utils.delete_older_than(
+                self.db, 'precompute_jobs', 'updated_timestamp', retention_seconds, now,
+                extra_where=' AND status IN (?, ?)',
+                extra_params=(statics.PrecomputeStatus.DONE.value, statics.PrecomputeStatus.FAILED.value))
 
 
     def close(self) -> None:

@@ -57,6 +57,37 @@ def test_multiple_queued_jobs_get_increasing_positions(tmp_path: pathlib.Path) -
     store.close()
 
 
+def test_queue_position_breaks_ties_on_identical_timestamps(tmp_path: pathlib.Path) -> None:
+    # Regression test: two queued rows landing the same created_timestamp
+    # (real on a coarse-resolution clock - e.g. Windows' time.time() can have
+    # ~15.6ms granularity) used to both report queue position 1, since
+    # _queue_position's ordering only compared timestamps. rowid now breaks
+    # the tie, so the two rows must report distinct positions that agree
+    # with the actual claim order below.
+    store = precompute_store.PrecomputeJobStore(tmp_path / 'jobs.sqlite')
+    _ = store.request('en', 5)  # running, occupies the only concurrency slot
+    _ = store.request('fr', 6)
+    _ = store.request('wordle', 5)
+
+    # Force both queued rows to the exact same timestamp.
+    tied_timestamp = time.time()
+    with store.lock, store.db:
+        _ = store.db.execute('UPDATE precompute_jobs SET created_timestamp = ? WHERE status = ?',
+                             (tied_timestamp, statics.PrecomputeStatus.QUEUED.value))
+
+    fr_status = store.get_status('fr', 6)
+    wordle_status = store.get_status('wordle', 5)
+
+    assert {fr_status.position, wordle_status.position} == {1, 2}  # distinct, not both 1
+
+    # The one reporting position 1 must be the one _claim_next_queued
+    # actually picks next.
+    next_lang, _ = store.mark_done('en', 5)
+    first_reported_position_lang = 'fr' if fr_status.position == 1 else 'wordle'
+    assert next_lang == first_reported_position_lang
+    store.close()
+
+
 def test_update_progress_and_get_status_round_trip(tmp_path: pathlib.Path) -> None:
     store = precompute_store.PrecomputeJobStore(tmp_path / 'jobs.sqlite')
     _ = store.request('en', 5)

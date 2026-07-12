@@ -87,7 +87,11 @@ async def get_active_games() -> api_schemas.ActiveGamesResponse:
 async def get_app_sources() -> api_schemas.AppSourcesResponse:
     """Report available languages/word lengths and their solver capabilities."""
     try:
-        client_sources = models.init_app_sources(client=True)
+        # Builds the client view from the already-loaded APP_SOURCES instead
+        # of re-scanning the data folder and re-parsing every language's word
+        # list from scratch (what a fresh init_app_sources(client=True) call
+        # would do) - see models.build_client_view.
+        client_sources = models.build_client_view(APP_SOURCES)
 
     except Exception:
         logger.exception("Failed to get app sources")
@@ -109,9 +113,10 @@ async def create_game_session(request: api_schemas.CreateGameSessionRequest) -> 
         _ = SESSION_STORE.delete_expired(APP_SOURCES.config.session_ttl_seconds)
 
         lang = request.lang.lower()
-        lang_source = APP_SOURCES.langs.get(lang)
-        precomputed = lang_source.pre_computed.get(str(request.word_length)) if lang_source else None
-        lang_launcher = precomputed.lang_launcher if precomputed else None
+        # Checks (and refreshes, if another worker finished this build since
+        # APP_SOURCES was last touched) the live state instead of reading
+        # APP_SOURCES.langs[...] directly - see models.refresh_lang_launcher_if_stale.
+        lang_launcher = models.refresh_lang_launcher_if_stale(APP_SOURCES, lang, request.word_length)
 
         session = models.create_game_session(lang, request.word_length, lang_launcher, request.game_mode, request.max_tries)
 

@@ -129,6 +129,12 @@ class LangLauncher:
         tac = time.perf_counter() - tic
         logger.info("Built cache compendium in %s second(s)...", round(tac, 2))
 
+        # `cache` becomes self.cache below (this build_mode=True connection is
+        # kept, not discarded) - without downgrading its exclusive lock now,
+        # no other connection to this same file (another worker process, or
+        # this process reopening it) could ever open it again.
+        cache.finish_build()
+
         return cache, word_counter_by_pattern
 
 

@@ -55,7 +55,28 @@ _EXACT = int(statics.StatusLetter.EXACT)
 _STREAM_BATCH_SIZE = 200_000
 
 
-def _compute_patterns_for_guess(guess_row: np.ndarray, words_arr: np.ndarray) -> np.ndarray:
+def _compute_letter_counts(words_arr: np.ndarray) -> np.ndarray:
+    """Total occurrence count of each of the 26 letters, per word.
+
+    Guess-invariant - depends only on `words_arr` itself, never on which
+    guess is being scored - so callers looping `_compute_patterns_for_guess`
+    over many guesses against the same `words_arr` should compute this once
+    and pass it in, instead of paying its `O(alphabet_size * n)` cost again
+    for every single guess.
+
+    Args:
+        words_arr (np.ndarray): Shape `(n, word_length)` int array.
+
+    Returns:
+        np.ndarray: Shape `(n, _ALPHABET_SIZE)` int array.
+    """
+    letter_counts = np.zeros((words_arr.shape[0], _ALPHABET_SIZE), dtype=np.int16)
+    for offset in range(_ALPHABET_SIZE):
+        letter_counts[:, offset] = (words_arr == (_ALPHABET_MIN + offset)).sum(axis=1)
+    return letter_counts
+
+
+def _compute_patterns_for_guess(guess_row: np.ndarray, words_arr: np.ndarray, letter_counts: np.ndarray) -> np.ndarray:
     """Pattern of one guess against every row of `words_arr`, vectorized.
 
     Same result as calling `computing.compute_pattern(guess, word)` once per
@@ -66,6 +87,10 @@ def _compute_patterns_for_guess(guess_row: np.ndarray, words_arr: np.ndarray) ->
     Args:
         guess_row (np.ndarray): Shape `(word_length,)` int array, one guess's letters.
         words_arr (np.ndarray): Shape `(n, word_length)` int array, every candidate word's letters.
+        letter_counts (np.ndarray): Precomputed via `_compute_letter_counts(words_arr)` -
+            guess-invariant, so a caller looping over many guesses against the
+            same `words_arr` should compute this once and reuse it here,
+            rather than every call recomputing it from scratch.
 
     Returns:
         np.ndarray: Shape `(n,)` int array of packed pattern ints.
@@ -75,10 +100,15 @@ def _compute_patterns_for_guess(guess_row: np.ndarray, words_arr: np.ndarray) ->
 
     # Per-letter count remaining in each word after removing letters already
     # spent on an exact match - the budget the second pass below draws down.
-    remaining = np.zeros((n, _ALPHABET_SIZE), dtype=np.int16)
-    for offset in range(_ALPHABET_SIZE):
-        is_letter: np.ndarray = words_arr == (_ALPHABET_MIN + offset)
-        remaining[:, offset] = is_letter.sum(axis=1) - (is_letter & exact).sum(axis=1)
+    # Only the letters actually present in *this* guess are ever consulted
+    # below (`remaining[:, offset]` for `offset` derived from `guess_row`),
+    # so only those need their exact-match count subtracted here - looping
+    # over all 26 possible letters regardless would redo the same
+    # `is_letter & exact` work for letters this guess can never ask about.
+    remaining = letter_counts.copy()
+    for offset in {int(letter) - _ALPHABET_MIN for letter in guess_row}:
+        is_letter = words_arr == (_ALPHABET_MIN + offset)
+        remaining[:, offset] -= (is_letter & exact).sum(axis=1)
 
     pattern = np.full((n, length), _MISS, dtype=np.int8)
     pattern[exact] = _EXACT
@@ -122,11 +152,12 @@ def compute_word_counter_by_pattern_cross(guesses: set[Tord], targets: set[Tord]
     """
     targets_arr = np.array(list(targets), dtype=np.int16)
     word_length = targets_arr.shape[1]
+    letter_counts = _compute_letter_counts(targets_arr)
 
     word_counter_by_pattern: WordCounterByPattern = {}
 
     for guess in guesses:
-        pattern_ints = _compute_patterns_for_guess(np.array(guess, dtype=np.int16), targets_arr)
+        pattern_ints = _compute_patterns_for_guess(np.array(guess, dtype=np.int16), targets_arr, letter_counts)
 
         for pattern_int, count in Counter(int(p) for p in pattern_ints).items():
             pattern_tuple = word_codec.tord_from_int(pattern_int, word_length, units=10)
@@ -186,6 +217,7 @@ def stream_pattern_compendium_to_cache(pool_words: set[Tord], cache: compendium_
 
     word_ints = np.array([word_codec.tord_to_int(word) for word in words_list], dtype=np.int64)
     word_length = words_arr.shape[1]
+    letter_counts = _compute_letter_counts(words_arr)
 
     word_counter_by_pattern: WordCounterByPattern = {}
     pending: dict[int, tuple[list[int], list[int]]] = {}
@@ -203,7 +235,7 @@ def stream_pattern_compendium_to_cache(pool_words: set[Tord], cache: compendium_
     last_log = tic
 
     for gi, guess in enumerate(words_list):
-        pattern_ints = _compute_patterns_for_guess(words_arr[gi], words_arr)
+        pattern_ints = _compute_patterns_for_guess(words_arr[gi], words_arr, letter_counts)
 
         now = time.perf_counter()
         if now - last_log >= _PROGRESS_LOG_INTERVAL_SECONDS:

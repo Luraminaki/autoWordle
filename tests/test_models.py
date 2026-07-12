@@ -86,6 +86,89 @@ def test_submit_guess_rejects_solve_mode(tmp_path: pathlib.Path, mini_words_file
     assert session.meta.current_tries == 0
 
 
+def test_refresh_lang_launcher_if_stale_picks_up_build_from_another_worker(test_app_root: pathlib.Path) -> None:
+    # Simulates two uvicorn workers sharing the same data folder: app_sources
+    # is a plain in-memory structure, not SQLite-backed like SESSION_STORE/
+    # PRECOMPUTE_STORE, so a build finished by run_precompute_job against a
+    # *different* AppSources instance (a different worker) never updates this
+    # one on its own - refresh_lang_launcher_if_stale is what closes that gap
+    # on next use.
+    from autoWordle.app import precompute_store
+
+    worker_a_sources = models.init_app_sources(app_root=test_app_root)
+    worker_b_sources = models.init_app_sources(app_root=test_app_root)
+
+    # Neither worker sees exhaustive data for mini/5 yet (test config has
+    # compute_best_opening=False).
+    assert not worker_a_sources.langs['mini'].pre_computed['5'].lang_launcher.words_information
+    assert not worker_b_sources.langs['mini'].pre_computed['5'].lang_launcher.words_information
+
+    # "Worker A" builds it - writes the real *_info.csv/cache sidecars to
+    # disk and updates worker_a_sources in place.
+    job_store = precompute_store.PrecomputeJobStore(test_app_root / 'jobs.sqlite')
+    result = models.request_precompute(worker_a_sources, job_store, 'mini', 5)
+    assert result.should_start is True
+    models.run_precompute_job(worker_a_sources, job_store, 'mini', 5)
+    assert worker_a_sources.langs['mini'].pre_computed['5'].lang_launcher.words_information
+
+    # "Worker B" still doesn't know, until asked to refresh.
+    assert not worker_b_sources.langs['mini'].pre_computed['5'].lang_launcher.words_information
+    refreshed = models.refresh_lang_launcher_if_stale(worker_b_sources, 'mini', 5)
+
+    assert refreshed is not None
+    assert refreshed.words_information
+    # And it's now reflected in worker_b_sources itself, not just the return value.
+    assert worker_b_sources.langs['mini'].pre_computed['5'].lang_launcher.words_information
+    job_store.close()
+
+
+def test_refresh_lang_launcher_if_stale_returns_none_for_unknown_lang(test_app_root: pathlib.Path) -> None:
+    app_sources = models.init_app_sources(app_root=test_app_root)
+    assert models.refresh_lang_launcher_if_stale(app_sources, 'does-not-exist', 5) is None
+
+
+def test_build_client_view_reflects_current_state(test_app_root: pathlib.Path) -> None:
+    app_sources = models.init_app_sources(app_root=test_app_root)
+
+    client_view = models.build_client_view(app_sources)
+
+    assert 'mini' in client_view.langs
+    assert client_view.langs['mini'].pre_computed['5'].lang_launcher == 'LangLauncher'
+    assert client_view.langs['mini'].pre_computed['5'].has_exhaustive_data is False
+
+
+def test_build_client_view_does_not_leak_the_server_filesystem_path(test_app_root: pathlib.Path) -> None:
+    # Regression test: the client view's `path` fields must be just the
+    # filename (e.g. "mini.txt"), matching init_app_sources(client=True)'s
+    # own convention - not the full absolute server-side path, which would
+    # leak the server's filesystem layout (directory structure, OS username
+    # on Windows, etc.) to any caller of GET /get_app_sources.
+    app_sources = models.init_app_sources(app_root=test_app_root)
+
+    client_view = models.build_client_view(app_sources)
+
+    assert client_view.langs['mini'].path == 'mini.txt'
+    assert client_view.langs['mini'].pre_computed['5'].path == 'mini.txt'
+    assert str(test_app_root) not in client_view.langs['mini'].path
+
+
+def test_build_client_view_picks_up_build_from_another_worker(test_app_root: pathlib.Path) -> None:
+    from autoWordle.app import precompute_store
+
+    worker_a_sources = models.init_app_sources(app_root=test_app_root)
+    worker_b_sources = models.init_app_sources(app_root=test_app_root)
+
+    job_store = precompute_store.PrecomputeJobStore(test_app_root / 'jobs.sqlite')
+    _ = models.request_precompute(worker_a_sources, job_store, 'mini', 5)
+    models.run_precompute_job(worker_a_sources, job_store, 'mini', 5)
+
+    client_view = models.build_client_view(worker_b_sources)
+
+    assert client_view.langs['mini'].pre_computed['5'].has_exhaustive_data is True
+    assert client_view.langs['mini'].pre_computed['5'].lang_launcher == 'LangLauncher'
+    job_store.close()
+
+
 def test_submit_guess_raises_when_no_tries_remaining(test_app_root: pathlib.Path) -> None:
     # Regression test: this used to return None, indistinguishable from an
     # invalid word - webapp.api_views.submit_guess then always reported both

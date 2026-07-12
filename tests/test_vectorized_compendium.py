@@ -33,8 +33,9 @@ def test_compute_patterns_for_guess_matches_reference(guess: tuple[int, ...], wo
                                                       expected: tuple[int, ...]) -> None:
     words_arr = np.array([word], dtype=np.int16)
     guess_arr = np.array(guess, dtype=np.int16)
+    letter_counts = vectorized_compendium._compute_letter_counts(words_arr)  # pyright: ignore[reportPrivateUsage]
 
-    pattern_ints = vectorized_compendium._compute_patterns_for_guess(guess_arr, words_arr)  # pyright: ignore[reportPrivateUsage]
+    pattern_ints = vectorized_compendium._compute_patterns_for_guess(guess_arr, words_arr, letter_counts)  # pyright: ignore[reportPrivateUsage]
 
     assert int(pattern_ints[0]) == word_codec.tord_to_int(expected, 10)
 
@@ -42,9 +43,10 @@ def test_compute_patterns_for_guess_matches_reference(guess: tuple[int, ...], wo
 def test_compute_patterns_for_guess_exhaustive_against_reference(mini_words_file: pathlib.Path) -> None:
     words = list(word_codec.get_words_list(mini_words_file, word_length=5, shift=ord('a') - 10))
     words_arr = np.array(words, dtype=np.int16)
+    letter_counts = vectorized_compendium._compute_letter_counts(words_arr)  # pyright: ignore[reportPrivateUsage]
 
     for gi, guess in enumerate(words):
-        pattern_ints = vectorized_compendium._compute_patterns_for_guess(words_arr[gi], words_arr)  # pyright: ignore[reportPrivateUsage]
+        pattern_ints = vectorized_compendium._compute_patterns_for_guess(words_arr[gi], words_arr, letter_counts)  # pyright: ignore[reportPrivateUsage]
 
         for wi, word in enumerate(words):
             if word == guess:
@@ -52,6 +54,40 @@ def test_compute_patterns_for_guess_exhaustive_against_reference(mini_words_file
 
             expected = word_codec.tord_to_int(computing.compute_pattern(guess=guess, word=word), 10)
             assert int(pattern_ints[wi]) == expected
+
+
+def test_compute_letter_counts_tallies_every_letter_per_word() -> None:
+    # word_codec shift: 'a'=10, so (10,10,11,12,13) is "aabcd".
+    words_arr = np.array([(10, 10, 11, 12, 13), (14, 15, 16, 17, 18)], dtype=np.int16)
+
+    letter_counts = vectorized_compendium._compute_letter_counts(words_arr)  # pyright: ignore[reportPrivateUsage]
+
+    assert letter_counts[0, 10 - 10] == 2  # word 0 has two 'a's (offset 0)
+    assert letter_counts[0, 11 - 10] == 1  # and one 'b' (offset 1)
+    assert letter_counts[1, 10 - 10] == 0  # word 1 has no 'a' at all
+    assert letter_counts.sum() == 10  # 2 words * 5 letters each, every letter counted exactly once
+
+
+def test_reused_letter_counts_gives_same_results_across_different_guesses(mini_words_file: pathlib.Path) -> None:
+    # Regression test: letter_counts is computed once and reused for every
+    # guess in the real callers (stream_pattern_compendium_to_cache,
+    # compute_word_counter_by_pattern_cross) - confirm reusing the same
+    # precomputed array for multiple, different guesses against the same
+    # pool still gives each guess its own correct, independent pattern
+    # (nothing about the shared `letter_counts` leaks between guesses).
+    words = list(word_codec.get_words_list(mini_words_file, word_length=5, shift=ord('a') - 10))
+    words_arr = np.array(words, dtype=np.int16)
+    letter_counts = vectorized_compendium._compute_letter_counts(words_arr)  # pyright: ignore[reportPrivateUsage]
+
+    for guess in words[:5]:
+        guess_arr = np.array(guess, dtype=np.int16)
+        actual = vectorized_compendium._compute_patterns_for_guess(guess_arr, words_arr, letter_counts)  # pyright: ignore[reportPrivateUsage]
+
+        for wi, word in enumerate(words):
+            if word == guess:
+                continue
+            expected = word_codec.tord_to_int(computing.compute_pattern(guess=guess, word=word), 10)
+            assert int(actual[wi]) == expected
 
 
 def test_compute_word_counter_by_pattern_cross_matches_brute_force(mini_words_file: pathlib.Path) -> None:

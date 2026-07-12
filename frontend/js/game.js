@@ -84,9 +84,14 @@ async function updateHintsPanel(word, pattern, myGeneration) {
     const response = await getGuessStats(session.session_uuid, word, pattern);
     if (myGeneration !== gameGeneration) return; // stale by the time the request resolved
     renderHints(el.hints, response.guess_stats);
-  } catch {
+  } catch (err) {
     if (myGeneration !== gameGeneration) return;
     renderHints(el.hints, null);
+    // ApiError here just means "no hints for this guess" (a normal case,
+    // e.g. an empty candidate pool) - a network/timeout failure is a
+    // different situation the user should know about, not a silently
+    // blanked panel indistinguishable from that normal case.
+    if (!(err instanceof ApiError)) showToast(`Could not refresh hints (${err.message})`);
   }
 }
 

@@ -27,7 +27,7 @@ import time
 from threading import Lock
 
 from autoWordle.app import models, schemas
-from autoWordle.modules import computing, helpers, word_codec, wordle
+from autoWordle.modules import computing, helpers, sqlite_utils, word_codec, wordle
 
 logger = logging.getLogger(__name__)
 
@@ -46,14 +46,9 @@ class SessionStore:
         """
         self.app_sources: schemas.AppSources = app_sources
         self.lock: _thread.LockType = Lock()
-        self.db: sqlite3.Connection = sqlite3.connect(str(db_path), timeout=5.0, isolation_level=None, check_same_thread=False)
+        self.db: sqlite3.Connection = sqlite_utils.open_connection(str(db_path))
 
-        with self.lock:
-            _ = self.db.execute('PRAGMA journal_mode=WAL')
-            _ = self.db.execute('PRAGMA synchronous=NORMAL')
-            _ = self.db.execute('PRAGMA busy_timeout=5000')
-
-            with self.db:
+        with self.lock, self.db:
                 _ = self.db.execute('''
                     CREATE TABLE IF NOT EXISTS sessions (
                         session_uuid TEXT PRIMARY KEY,
@@ -236,8 +231,7 @@ class SessionStore:
         now = int(time.time())
 
         with self.lock, self.db:
-            cursor = self.db.execute('DELETE FROM sessions WHERE (? - last_active_timestamp) >= ?', (now, ttl_seconds))
-            return cursor.rowcount
+            return sqlite_utils.delete_older_than(self.db, 'sessions', 'last_active_timestamp', ttl_seconds, now)
 
 
     def close(self) -> None:

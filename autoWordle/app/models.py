@@ -16,7 +16,7 @@ import uuid
 from typing import Literal, overload
 
 from autoWordle.app import display, paths, precompute_store, schemas
-from autoWordle.modules import computing, helpers, statics, wordle
+from autoWordle.modules import computing, helpers, statics, word_codec, wordle
 
 logger = logging.getLogger(__name__)
 
@@ -104,6 +104,101 @@ def init_app_sources(app_root: pathlib.Path | None = None, client: bool = False)
 
     langs = {lang: schemas.LangSource.model_validate(source) for lang, source in langs_raw.items()}
     return schemas.AppSources(config=conf, langs=langs, game_modes=game_modes)
+
+
+def refresh_lang_launcher_if_stale(app_sources: schemas.AppSources, lang: str, word_length: int) -> helpers.LangLauncher | None:
+    """Look up `(lang, word_length)`'s `LangLauncher`, loading fresh exhaustive data if it now exists on disk.
+
+    `app_sources` is a plain in-memory structure shared across a single
+    process, unlike `SESSION_STORE`/`PRECOMPUTE_STORE` (SQLite-backed
+    specifically to stay correct across multiple `uvicorn` workers) - a build
+    completed by `run_precompute_job` on a *different* worker mutates only
+    that worker's own copy, so this worker's `app_sources` never learns about
+    it on its own. Rather than re-scanning the whole data folder and
+    re-parsing every language's word list on every request (what
+    `init_app_sources` does) to catch that, this does exactly one cheap
+    `Path.exists()` check for the specific combination being asked about, and
+    only pays the cost of actually loading it if that check indicates
+    something changed - `LangLauncher.compute_words_information` itself loads
+    the existing sidecar rather than recomputing it, since the marker file
+    already exists by the time this calls it.
+
+    Args:
+        app_sources (schemas.AppSources): Shared, mutable application sources.
+        lang (str): Language stem.
+        word_length (int): Word length.
+
+    Returns:
+        helpers.LangLauncher | None: The (possibly freshly loaded) launcher,
+        or `None` if `lang` isn't known at all.
+    """
+    lang_source = app_sources.langs.get(lang)
+    if lang_source is None:
+        return None
+
+    precomputed = lang_source.pre_computed.get(str(word_length))
+    if precomputed is not None and precomputed.lang_launcher is not None and precomputed.lang_launcher.words_information:
+        return precomputed.lang_launcher  # already loaded with real exhaustive data - fast path, no disk I/O
+
+    lang_path = precomputed.path if precomputed is not None else lang_source.path
+    _, words_information_file = word_codec.get_data_paths(lang_path, word_length)
+
+    if not words_information_file.exists():
+        # Nothing new on disk either - return whatever's already loaded (a
+        # bare, PLAY-only launcher for this length, or None).
+        return precomputed.lang_launcher if precomputed is not None else None
+
+    logger.info("Detected exhaustive data for %s/%d built elsewhere - loading it", lang, word_length)
+    fresh_launcher = helpers.LangLauncher(lang_path, compute_best_opening=True, word_length=word_length)
+    app_sources.langs[lang].pre_computed[str(word_length)] = schemas.PrecomputedEntry(
+        path=lang_path, length=word_length, lang_launcher=fresh_launcher, has_exhaustive_data=True)
+    return fresh_launcher
+
+
+def build_client_view(app_sources: schemas.AppSources) -> schemas.AppSourcesClientView:
+    """Build the client-safe view directly from the already-loaded `app_sources`.
+
+    Used by `GET /get_app_sources` instead of a fresh `init_app_sources(client=True)`
+    call, which re-globs the data folder and re-parses every language's word
+    list from scratch on every single request - real, if not hot-path,
+    redundant work for state that's already resident in memory. Each already-known
+    combination is refreshed on-demand first (see `refresh_lang_launcher_if_stale`),
+    so a build completed by a different worker still becomes visible without
+    a restart - only a brand new *language* (a `.txt` file dropped in while
+    the app is running) needs a restart to be discovered, same as before.
+
+    Args:
+        app_sources (schemas.AppSources): Shared, mutable application sources.
+
+    Returns:
+        schemas.AppSourcesClientView: JSON-serializable view (string
+        placeholders throughout, no live objects).
+    """
+    for lang, lang_source in app_sources.langs.items():
+        for word_length_str in list(lang_source.pre_computed):
+            _ = refresh_lang_launcher_if_stale(app_sources, lang, int(word_length_str))
+
+    # Built explicitly, not via LangSourceClient.model_validate(lang_source):
+    # `pre_computed` entries hold real `LangLauncher` instances here, and
+    # Pydantic has no built-in way to coerce those into the client's `str`
+    # placeholder field on its own - `init_lang_app_data`'s own client=True
+    # branch sidesteps this the same way, by building the placeholder string
+    # itself rather than leaning on validation to do it. `.name`, not the
+    # full path, for the same reason `init_lang_app_data`'s client branch
+    # uses `lang_file.name` - the server's absolute filesystem layout isn't
+    # something a client response should expose.
+    client_langs = {}
+    for lang, lang_source in app_sources.langs.items():
+        client_pre_computed = {
+            word_length_str: schemas.PrecomputedEntryClient(
+                path=entry.path.name, length=entry.length,
+                lang_launcher=str(entry.lang_launcher) if entry.lang_launcher is not None else 'None',
+                has_exhaustive_data=entry.has_exhaustive_data)
+            for word_length_str, entry in lang_source.pre_computed.items()
+        }
+        client_langs[lang] = schemas.LangSourceClient(path=lang_source.path.name, pre_computed=client_pre_computed)
+
+    return schemas.AppSourcesClientView(config=app_sources.config, langs=client_langs, game_modes=app_sources.game_modes)
 
 
 def create_game_session(lang: str, word_length: int, lang_launcher: helpers.LangLauncher | None,
@@ -329,8 +424,11 @@ def request_precompute(app_sources: schemas.AppSources, job_store: precompute_st
     if lang not in app_sources.langs:
         raise PrecomputeNotAllowedError(f'Unknown language {lang!r}')
 
-    precomputed = app_sources.langs[lang].pre_computed.get(str(word_length))
-    if precomputed is not None and precomputed.lang_launcher is not None and precomputed.lang_launcher.words_information:
+    # Checks (and refreshes, if another worker finished this build since
+    # app_sources was last touched) the live state instead of reading
+    # app_sources.langs[...] directly - see refresh_lang_launcher_if_stale.
+    lang_launcher = refresh_lang_launcher_if_stale(app_sources, lang, word_length)
+    if lang_launcher is not None and lang_launcher.words_information:
         return precompute_store.PrecomputeRequestResult(status=statics.PrecomputeStatus.DONE, position=None, should_start=False)
 
     return job_store.request(lang, word_length)

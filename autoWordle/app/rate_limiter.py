@@ -32,6 +32,7 @@ class RateLimiter:
         self.window_seconds: float = window_seconds
         self.lock: Lock = Lock()
         self._hits: dict[str, deque[float]] = defaultdict(deque)
+        self._last_sweep: float = time.time()
 
     def allow(self, key: str) -> bool:
         """Record a hit for `key` and report whether it's within the limit.
@@ -47,6 +48,8 @@ class RateLimiter:
         now = time.time()
 
         with self.lock:
+            self._sweep_if_due(now)
+
             hits = self._hits[key]
             while hits and (now - hits[0]) > self.window_seconds:
                 hits.popleft()
@@ -56,3 +59,24 @@ class RateLimiter:
 
             hits.append(now)
             return True
+
+    def _sweep_if_due(self, now: float) -> None:
+        """Drop entries for keys that haven't made a request in over a window.
+
+        A key's deque is only ever trimmed when *that same key* is looked up
+        again in `allow()` - a key that stops making requests entirely (the
+        common case for a rate limiter: most callers hit it once and never
+        return) is never looked up again to trigger that, so without this,
+        `self._hits` would grow by one permanent entry per distinct key ever
+        seen, for the life of the process. Runs at most once per
+        `window_seconds`, amortizing the O(total keys) sweep cost instead of
+        paying it on every single call. Caller must already hold `self.lock`.
+        """
+        if (now - self._last_sweep) < self.window_seconds:
+            return
+
+        stale_keys = [key for key, hits in self._hits.items() if not hits or (now - hits[-1]) > self.window_seconds]
+        for key in stale_keys:
+            del self._hits[key]
+
+        self._last_sweep = now

@@ -33,6 +33,8 @@ import sqlite3
 from collections.abc import Iterable
 from threading import Lock
 
+from autoWordle.modules import sqlite_utils
+
 logger = logging.getLogger(__name__)
 
 
@@ -53,19 +55,13 @@ class CacheDB:
         """
         self.db_path: str = str(db_file_path)
         self.lock: _thread.LockType = Lock()
-        self.db: sqlite3.Connection = sqlite3.connect(self.db_path, timeout=5.0, isolation_level=None, check_same_thread=False)
+        # wal=False when build_mode: that branch below wants its own distinct
+        # journal_mode=OFF/synchronous=OFF profile instead (see the comment
+        # there), not open_connection's WAL/NORMAL default - either way,
+        # busy_timeout is set first (see open_connection's docstring for why).
+        self.db: sqlite3.Connection = sqlite_utils.open_connection(self.db_path, wal=not build_mode)
 
         with self.lock:
-            # Set *before* any other pragma, including `journal_mode`/
-            # `synchronous` below: those can themselves hit "database is
-            # locked" if another connection to the same file is momentarily
-            # busy (e.g. a second `CacheDB` opened for an already-loaded,
-            # already-open language - now a real scenario once precompute
-            # can be triggered on demand, not just once at startup), and
-            # without `busy_timeout` set yet, that first contended call
-            # fails immediately instead of retrying.
-            _ = self.db.execute('PRAGMA busy_timeout=5000')
-
             if build_mode:
                 # One-time bulk build of a fully regenerable cache: avoid WAL
                 # entirely. WAL's periodic auto-checkpointing (writing
@@ -77,9 +73,6 @@ class CacheDB:
                 _ = self.db.execute('PRAGMA journal_mode=OFF')
                 _ = self.db.execute('PRAGMA synchronous=OFF')
                 _ = self.db.execute('PRAGMA locking_mode=EXCLUSIVE')
-            else:
-                _ = self.db.execute('PRAGMA journal_mode=WAL')
-                _ = self.db.execute('PRAGMA synchronous=NORMAL')
 
             _ = self.db.execute('PRAGMA temp_store=MEMORY')
             _ = self.db.execute('PRAGMA cache_size=-20000')  # ~20 MB page cache, negative = KB
@@ -87,6 +80,30 @@ class CacheDB:
             with self.db:
                 for pattern in patterns:
                     _ = self.db.execute(f'CREATE TABLE IF NOT EXISTS "{int(pattern)}" (guess INTEGER NOT NULL, word INTEGER NOT NULL)')
+
+
+    def finish_build(self) -> None:
+        """Downgrade a `build_mode=True` connection's exclusive lock back to normal sharing.
+
+        `locking_mode=EXCLUSIVE` only takes effect - and only releases -
+        on a connection's *next* database access after the pragma is changed,
+        not immediately. Without calling this once a `build_mode=True` build
+        is done, this connection (which becomes the long-lived `self.cache`
+        used for reads during gameplay, not just discarded after the build)
+        keeps holding an OS-level exclusive lock on the file forever, and no
+        other connection - a different process, or this same process opening
+        a second connection to the same file - can even open it, let alone
+        read it, until this one closes entirely. Only meaningful to call
+        right after a `build_mode=True` build; harmless otherwise.
+        """
+        with self.lock, self.db:
+            _ = self.db.execute('PRAGMA locking_mode=NORMAL')
+            _ = self.db.execute('PRAGMA journal_mode=WAL')
+            _ = self.db.execute('PRAGMA synchronous=NORMAL')
+            # A real access is what actually applies the locking-mode change
+            # (see above) - without this, it would silently wait for whatever
+            # future query happens to run first.
+            _ = self.db.execute('SELECT 1')
 
 
     def add_entries(self, pattern: int, guess: list[int], word: list[int]) -> bool:
@@ -107,7 +124,12 @@ class CacheDB:
 
         try:
             with self.lock, self.db:
-                _ = self.db.executemany(f'INSERT INTO "{int(pattern)}" (guess, word) VALUES (?, ?)', list(zip(guess, word, strict=True)))
+                # zip(..., strict=True) passed directly: executemany iterates
+                # its second argument lazily, so wrapping it in list() first
+                # would only force a full upfront materialization for no
+                # benefit - the strict-length check still fires during that
+                # same lazy iteration either way.
+                _ = self.db.executemany(f'INSERT INTO "{int(pattern)}" (guess, word) VALUES (?, ?)', zip(guess, word, strict=True))
 
         except Exception:
             logger.exception("Failed to INSERT entries for pattern %s", pattern)
@@ -141,7 +163,7 @@ class CacheDB:
                         logger.warning("Refusing to INSERT mismatched/empty entries for pattern %s", pattern)
                         continue
 
-                    _ = self.db.executemany(f'INSERT INTO "{int(pattern)}" (guess, word) VALUES (?, ?)', list(zip(guess, word, strict=True)))
+                    _ = self.db.executemany(f'INSERT INTO "{int(pattern)}" (guess, word) VALUES (?, ?)', zip(guess, word, strict=True))
 
         except Exception:
             logger.exception("Failed to INSERT batched entries")

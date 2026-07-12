@@ -110,6 +110,13 @@ export async function runPrecompute(lang, wordLength, { barEl, fillEl, statusEl,
   };
 
   source.onerror = () => {
+    // EventSource retries automatically on a transient drop (readyState
+    // becomes CONNECTING, not CLOSED) - the build itself keeps progressing
+    // server-side regardless of this one connection's state, so treating
+    // every blip as terminal would show a hard error for something that was
+    // about to recover on its own. Only CLOSED (the browser gave up, or this
+    // was a fatal client-side error) is an actual, unrecoverable failure.
+    if (source.readyState !== EventSource.CLOSED) return;
     source.close();
     onError('Lost connection to the precompute progress stream');
   };
