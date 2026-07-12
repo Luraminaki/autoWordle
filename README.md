@@ -15,7 +15,7 @@ It's still a "work in progress" as of now... And there is a lot of room for impr
 
 - [autoWordle](#autowordle)
   - [TABLE OF CONTENT](#table-of-content)
-  - [VERSIONS](#versions)
+  - [VERSION](#version)
   - [ARCHITECTURE](#architecture)
   - [THE SOLVER](#the-solver)
   - [PROJECT LAYOUT](#project-layout)
@@ -25,9 +25,10 @@ It's still a "work in progress" as of now... And there is a lot of room for impr
 
 <!-- /TOC -->
 
-## VERSIONS
+## VERSION
 
-See [CHANGELOG.md](CHANGELOG.md) for the full version history.
+The current version lives in [pyproject.toml](pyproject.toml) and is read from package
+metadata at runtime. See [CHANGELOG.md](CHANGELOG.md) for the full version history.
 
 ## ARCHITECTURE
 
