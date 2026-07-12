@@ -86,6 +86,24 @@ def test_submit_guess_rejects_solve_mode(tmp_path: pathlib.Path, mini_words_file
     assert session.meta.current_tries == 0
 
 
+def test_submit_guess_raises_when_no_tries_remaining(test_app_root: pathlib.Path) -> None:
+    # Regression test: this used to return None, indistinguishable from an
+    # invalid word - webapp.api_views.submit_guess then always reported both
+    # as INVALID_WORD, telling a player who was simply out of tries that
+    # their (possibly valid) word was invalid.
+    app_sources = models.init_app_sources(app_root=test_app_root)
+    lang_launcher = app_sources.langs['mini'].pre_computed['5'].lang_launcher
+
+    session = models.create_game_session('mini', 5, lang_launcher, statics.GameMode.GAME_MODE_PLAY, max_tries=1)
+    word_str = ''.join(chr(letter + session.game.shift) for letter in next(iter(session.game.language_launcher.words)))
+
+    _ = models.submit_guess(session, word_str)  # uses up the only try
+    assert session.meta.current_tries == 1
+
+    with pytest.raises(models.NoTriesRemainingError):
+        _ = models.submit_guess(session, word_str)
+
+
 def test_submit_guess_and_get_stats_round_trip(test_app_root: pathlib.Path) -> None:
     app_sources = models.init_app_sources(app_root=test_app_root)
     lang_launcher = app_sources.langs['mini'].pre_computed['5'].lang_launcher

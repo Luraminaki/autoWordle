@@ -45,6 +45,22 @@ def test_create_game_session_and_submit_guess_play_mode(client: TestClient) -> N
     assert stats.json()['session_stats']['guesses'] == ['crane']
 
 
+def test_submit_guess_reports_no_tries_remaining_distinctly(client: TestClient) -> None:
+    # Regression test: this used to be indistinguishable from INVALID_WORD,
+    # so a player simply out of tries was told their (possibly valid) word
+    # was invalid.
+    create = client.post('/api/app/create_game_session',
+                         json={'lang': 'mini', 'word_length': 5, 'max_tries': 1, 'game_mode': 'GAME_MODE_PLAY'})
+    session_uuid = create.json()['session_uuid']
+
+    first = client.post('/api/app/submit_guess', json={'session_uuid': session_uuid, 'word': 'crane'})
+    assert first.json()['status'] == 'SUCCESS'  # uses up the only try
+
+    second = client.post('/api/app/submit_guess', json={'session_uuid': session_uuid, 'word': 'crane'})
+    assert second.json()['status'] == 'ERROR'
+    assert second.json()['error'] == 'NO_TRIES_REMAINING'
+
+
 def test_create_game_session_rejects_unknown_session_on_submit(client: TestClient) -> None:
     response = client.post('/api/app/submit_guess', json={'session_uuid': 'does-not-exist', 'word': 'crane'})
     assert response.status_code == 200
@@ -92,6 +108,12 @@ def test_create_game_session_solve_mode_fails_without_exhaustive_data(client: Te
     assert response.status_code == 200
     assert response.json()['status'] == 'ERROR'
     assert response.json()['session_uuid'] is None
+    # Regression test: this used to only be caught by a generic `except
+    # Exception`, so the caller got the opaque INTERNAL_ERROR instead of the
+    # specific, safe validation message - and the routine rejection was
+    # logged server-side as if it were an unexpected bug.
+    assert response.json()['error'] != 'INTERNAL_ERROR'
+    assert 'exhaustive solver data' in response.json()['error']
 
 
 def test_max_sessions_limit_is_enforced(client: TestClient) -> None:
@@ -224,6 +246,35 @@ def test_precompute_duplicate_request_does_not_restart(client: TestClient) -> No
     assert body['job_status'] == 'running'
 
 
+def test_precompute_failure_does_not_leak_raw_exception_detail(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    # Regression test: a failed build used to store repr(err) as the job's
+    # error - potentially including internal file paths - and that raw text
+    # was streamed verbatim to any SSE client. It must now be a safe, generic
+    # message instead (the real exception is still logged server-side).
+    from autoWordle.app import models
+
+    def _boom(*_args, **_kwargs):
+        raise PermissionError(13, r"Permission denied: C:\secret\internal\path\wordle_en.txt")
+
+    monkeypatch.setattr(models.helpers, 'LangLauncher', _boom)
+
+    # Same as test_precompute_builds_and_progress_reports_done: the trigger
+    # response reflects the state at scheduling time (before the background
+    # task runs), always 'running' here - the SSE stream below observes the
+    # eventual outcome.
+    trigger = client.post('/api/app/precompute', json={'lang': 'mini', 'word_length': 5})
+    assert trigger.json()['job_status'] == 'running'
+
+    with client.stream('GET', '/api/app/precompute_progress', params={'lang': 'mini', 'word_length': 5}) as stream:
+        line = next(line for line in stream.iter_lines() if line.startswith('data: '))
+    payload = json.loads(line[len('data: '):])
+
+    assert payload['status'] == 'failed'
+    assert 'secret' not in payload['error']
+    assert 'PermissionError' not in payload['error']
+    assert payload['error'] == 'Build failed - see server logs for details'
+
+
 def test_precompute_prunes_finished_jobs_before_counting(client: TestClient) -> None:
     from autoWordle.app import precompute_store
     from autoWordle.webapp import api_views
@@ -286,6 +337,39 @@ def test_precompute_progress_includes_current_job_when_queued(client: TestClient
     assert payload['current_job'] == {'lang': 'mini', 'word_length': 5, 'fraction_done': 0.42, 'eta_seconds': 17.0}
 
 
+def test_precompute_route_reclaims_stale_running_job_and_schedules_the_promoted_one(
+        client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    # Regression test: PrecomputeJobStore.reclaim_stale_running can detect and
+    # fail a crashed worker's job and promote the next queued one in the DB,
+    # but it has no ability to actually *run* anything - the route calling it
+    # must schedule the promoted job itself, or it would just sit as
+    # 'running' with nothing ever computing it.
+    from autoWordle.webapp import api_views
+
+    first = api_views.PRECOMPUTE_STORE.request('mini', 5)
+    assert first.should_start is True
+    second = api_views.PRECOMPUTE_STORE.request('mini', 6)  # queued behind mini/5
+    assert second.should_start is False
+
+    with api_views.PRECOMPUTE_STORE.lock, api_views.PRECOMPUTE_STORE.db:
+        _ = api_views.PRECOMPUTE_STORE.db.execute(
+            'UPDATE precompute_jobs SET updated_timestamp = updated_timestamp - ? WHERE lang = ? AND word_length = ?',
+            (60.0, 'mini', 5))  # older than _STALE_TIMEOUT_SECONDS
+
+    scheduled = []
+    monkeypatch.setattr(api_views.models, 'run_precompute_job',
+                        lambda app_sources, job_store, lang, word_length: scheduled.append((lang, word_length)))
+
+    # Any /precompute call opportunistically reclaims - use an unrelated,
+    # already-done-style rejection (unknown lang) so this call itself doesn't
+    # start yet another job and muddy the assertion.
+    _ = client.post('/api/app/precompute', json={'lang': 'does-not-exist', 'word_length': 5})
+
+    assert ('mini', 6) in scheduled
+    assert api_views.PRECOMPUTE_STORE.get_status('mini', 5).status.value == 'failed'
+    assert api_views.PRECOMPUTE_STORE.get_status('mini', 6).status.value == 'running'
+
+
 def test_precompute_rate_limit_returns_429(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
     from autoWordle.app import precompute_store
     from autoWordle.webapp import api_views
@@ -311,6 +395,28 @@ def test_precompute_rejects_unknown_language(client: TestClient) -> None:
 
     assert response.status_code == 200
     assert body['status'] == 'ERROR'
+
+
+def test_precompute_progress_reports_error_on_unexpected_exception(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    # Regression test: this generator used to have no exception handling at
+    # all, unlike every other route in this module - an unexpected failure
+    # just silently killed the stream with no error event and no server-side
+    # log entry from this module.
+    from autoWordle.webapp import api_views
+
+    _ = api_views.PRECOMPUTE_STORE.request('mini', 5)
+
+    def _boom(*_args, **_kwargs):
+        raise RuntimeError('boom')
+
+    monkeypatch.setattr(api_views.PRECOMPUTE_STORE, 'get_status', _boom)
+
+    with client.stream('GET', '/api/app/precompute_progress', params={'lang': 'mini', 'word_length': 5}) as stream:
+        line = next(line for line in stream.iter_lines() if line.startswith('data: '))
+    payload = json.loads(line[len('data: '):])
+
+    assert payload['status'] == 'error'
+    assert payload['error'] == 'INTERNAL_ERROR'
 
 
 def test_precompute_progress_reports_not_found_for_unrequested_combo(client: TestClient) -> None:

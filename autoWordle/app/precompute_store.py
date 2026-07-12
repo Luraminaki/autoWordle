@@ -302,6 +302,51 @@ class PrecomputeJobStore:
                                    fraction_done=fraction_done, eta_seconds=eta_seconds, error='', position=None)
 
 
+    def reclaim_stale_running(self) -> tuple[str, int] | None:
+        """Detect a stale RUNNING row, mark it failed, and promote the next queued job if any.
+
+        A worker that crashes mid-build never reaches `models.run_precompute_job`'s
+        except block, so `mark_failed`/`_claim_next_queued` are never called for
+        it - without this method, that row stays 'running' forever (frozen
+        progress, per `get_status`), and anything queued behind it stays
+        queued forever too, since nothing else ever revisits it.
+
+        This store has no ability to actually *run* a promoted job itself
+        (it's just SQLite state) - the caller is responsible for scheduling
+        `models.run_precompute_job` for whatever `(lang, word_length)` this
+        returns. Both the `/precompute` route and the `/precompute_progress`
+        SSE loop call this, so as long as at least one client has either open,
+        a stuck queue gets noticed and restarted within one stale-check cycle.
+
+        Returns:
+            tuple[str, int] | None: The `(lang, word_length)` just promoted
+            to running, if a stale row was found and something was queued
+            behind it - the caller must schedule its execution. `None` if
+            nothing was stale, or nothing was queued to promote.
+        """
+        now = time.time()
+
+        with self.lock, self.db:
+            row = self.db.execute(
+                'SELECT lang, word_length, updated_timestamp FROM precompute_jobs WHERE status = ?',
+                (statics.PrecomputeStatus.RUNNING.value,)).fetchone()
+            if row is None:
+                return None
+
+            lang, word_length, updated_timestamp = row
+            if not self._is_stale(updated_timestamp, now):
+                return None
+
+            _ = self.db.execute(
+                'UPDATE precompute_jobs SET status = ?, error = ?, updated_timestamp = ? '
+                + 'WHERE lang = ? AND word_length = ? AND status = ?',
+                (statics.PrecomputeStatus.FAILED.value,
+                 'Build appears to have stalled (worker unresponsive) and was marked failed.',
+                 now, lang, word_length, statics.PrecomputeStatus.RUNNING.value))
+
+            return self._claim_next_queued()
+
+
     def prune_finished(self, retention_seconds: float) -> int:
         """Delete DONE/FAILED rows whose last update is older than `retention_seconds`.
 

@@ -126,7 +126,12 @@ def update_letter_extractor(old_ext: LetterExtractor, new_ext: LetterExtractor) 
             old_ext.incl[letter] = new_ext.incl[letter]
             continue
 
-        old_ext.incl[letter] = old_ext.incl[letter] + new_ext.incl[letter]
+        # max, not sum: incl[letter] is the known occurrence count of `letter`
+        # in the target word - each guess re-derives an independent lower
+        # bound on that same physical count, so combining two guesses must
+        # keep the higher (more informative) bound, not add them together
+        # (which would double-count the same occurrences).
+        old_ext.incl[letter] = max(old_ext.incl[letter], new_ext.incl[letter])
 
     old_ext.excl.update(new_ext.excl)
 
@@ -152,7 +157,12 @@ def gather_pool_letters(pool_words: WordsInformation) -> tuple[set[int], dict[in
 
         if len(unique_letters) < len(word):
             for letter in unique_letters:
-                if count := word.count(letter):
+                # > 1, not truthy: word.count(letter) is always >= 1 for any
+                # letter actually in the word, so a bare truthiness check
+                # flagged every unique letter of a word as a "duplicate" the
+                # moment that word had any repeated letter at all, instead of
+                # only the letter(s) that actually repeat.
+                if (count := word.count(letter)) > 1:
                     dupes[letter] = count if dupes.get(letter, 0) < count else dupes.get(letter, count)
 
     return pool_letters, dupes

@@ -91,16 +91,12 @@ class SessionStore:
         return precomputed.lang_launcher if precomputed else None
 
 
-    def save(self, session: models.GameSession) -> None:
-        """Persist a session, inserting or overwriting it by `session_uuid`.
-
-        Args:
-            session (models.GameSession): Session to persist.
-        """
+    def _build_row(self, session: models.GameSession) -> tuple:
+        """Build the SQL row tuple for `session` - shared by `save`/`save_if_under_limit`."""
         game = session.game
         meta = session.meta
 
-        row = (
+        return (
             meta.session_uuid, meta.lang, meta.word_length, meta.game_mode.value,
             meta.max_tries, meta.current_tries, json.dumps(meta.guesses), json.dumps(meta.patterns),
             meta.created_timestamp, meta.last_active_timestamp,
@@ -108,18 +104,56 @@ class SessionStore:
             game.information, json.dumps(dataclasses.asdict(game.letter_extractor)),
         )
 
+
+    def _insert_row(self, row: tuple) -> None:
+        """Insert/overwrite a session row. Caller must already hold `self.lock`/`self.db`."""
+        self.db.execute('''
+            INSERT INTO sessions (session_uuid, lang, word_length, game_mode, max_tries, current_tries,
+                                  guesses, patterns, created_timestamp, last_active_timestamp,
+                                  word, pool_words, information, letter_extractor)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(session_uuid) DO UPDATE SET
+                game_mode=excluded.game_mode, max_tries=excluded.max_tries, current_tries=excluded.current_tries,
+                guesses=excluded.guesses, patterns=excluded.patterns, last_active_timestamp=excluded.last_active_timestamp,
+                word=excluded.word, pool_words=excluded.pool_words, information=excluded.information,
+                letter_extractor=excluded.letter_extractor
+        ''', row)
+
+
+    def save(self, session: models.GameSession) -> None:
+        """Persist a session, inserting or overwriting it by `session_uuid`.
+
+        Args:
+            session (models.GameSession): Session to persist.
+        """
         with self.lock, self.db:
-            _ = self.db.execute('''
-                INSERT INTO sessions (session_uuid, lang, word_length, game_mode, max_tries, current_tries,
-                                      guesses, patterns, created_timestamp, last_active_timestamp,
-                                      word, pool_words, information, letter_extractor)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                ON CONFLICT(session_uuid) DO UPDATE SET
-                    game_mode=excluded.game_mode, max_tries=excluded.max_tries, current_tries=excluded.current_tries,
-                    guesses=excluded.guesses, patterns=excluded.patterns, last_active_timestamp=excluded.last_active_timestamp,
-                    word=excluded.word, pool_words=excluded.pool_words, information=excluded.information,
-                    letter_extractor=excluded.letter_extractor
-            ''', row)
+            self._insert_row(self._build_row(session))
+
+
+    def save_if_under_limit(self, session: models.GameSession, max_sessions: int) -> bool:
+        """Persist a *new* session, but only if the current count is under `max_sessions`.
+
+        Counting and inserting happen inside one held lock, unlike a separate
+        `count()` call followed by `save()` - the previous pattern was a
+        check-then-act race where two concurrent requests could both observe
+        a count under the cap before either had inserted, letting the cap be
+        exceeded.
+
+        Args:
+            session (models.GameSession): Session to persist.
+            max_sessions (int): Maximum sessions allowed before this insert is rejected.
+
+        Returns:
+            bool: `True` if the session was saved, `False` if the cap was
+            already reached (session is NOT persisted in that case).
+        """
+        with self.lock, self.db:
+            current_count = self.db.execute('SELECT COUNT(*) FROM sessions').fetchone()[0]
+            if current_count >= max_sessions:
+                return False
+
+            self._insert_row(self._build_row(session))
+            return True
 
 
     def load(self, session_uuid: str) -> models.GameSession | None:

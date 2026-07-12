@@ -58,17 +58,31 @@ def test_build_letter_extractor_and_update() -> None:
     assert extractor.incl == {1: 1, 3: 1, 5: 1}
     assert extractor.excl == {2: 1, 4: 1}
 
+    # A previously-known count merges as the max across guesses, not a sum -
+    # each guess re-derives an independent lower bound on the same physical
+    # letter count, so two guesses each showing "at least 1" of a letter must
+    # not be read as "at least 2".
     merged = computing.update_letter_extractor(computing.LetterExtractor(incl={1: 1}), extractor)
-    assert merged.incl == {1: 2, 3: 1, 5: 1}
+    assert merged.incl == {1: 1, 3: 1, 5: 1}
     assert merged.excl == {2: 1, 4: 1}
+
+    # A higher count from a later guess still correctly wins over a lower one...
+    merged_higher = computing.update_letter_extractor(
+        computing.LetterExtractor(incl={1: 1}), computing.LetterExtractor(incl={1: 2}))
+    assert merged_higher.incl == {1: 2}
+
+    # ...and a lower count from a later guess doesn't overwrite a higher one.
+    merged_lower = computing.update_letter_extractor(
+        computing.LetterExtractor(incl={1: 2}), computing.LetterExtractor(incl={1: 1}))
+    assert merged_lower.incl == {1: 2}
 
 
 def test_gather_pool_letters_detects_dupes() -> None:
-    # Once a word has any duplicated letter, every unique letter in that word
-    # gets a recorded count (not just the duplicated one) - the second word
-    # here has no duplicates at all, so it contributes no entries.
+    # Only letters that actually repeat within a word get a dupes entry - a
+    # word having some repeated letter must not also flag its other,
+    # non-repeated letters (2, 3, 4 here) as possible duplicates.
     pool = [((1, 1, 2, 3, 4), 1.0), ((5, 6, 7, 8, 9), 1.0)]
     pool_letters, dupes = computing.gather_pool_letters(pool)
 
     assert pool_letters == {1, 2, 3, 4, 5, 6, 7, 8, 9}
-    assert dupes == {1: 2, 2: 1, 3: 1, 4: 1}
+    assert dupes == {1: 2}

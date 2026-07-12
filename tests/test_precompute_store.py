@@ -130,6 +130,55 @@ def test_stale_running_job_is_reclaimed(tmp_path: pathlib.Path) -> None:
     store.close()
 
 
+def test_reclaim_stale_running_returns_none_when_nothing_stale(tmp_path: pathlib.Path) -> None:
+    store = precompute_store.PrecomputeJobStore(tmp_path / 'jobs.sqlite')
+    _ = store.request('en', 5)
+
+    assert store.reclaim_stale_running() is None
+    assert store.get_status('en', 5).status == statics.PrecomputeStatus.RUNNING
+    store.close()
+
+
+def test_reclaim_stale_running_returns_none_when_nothing_running(tmp_path: pathlib.Path) -> None:
+    store = precompute_store.PrecomputeJobStore(tmp_path / 'jobs.sqlite')
+    assert store.reclaim_stale_running() is None
+    store.close()
+
+
+def test_reclaim_stale_running_fails_crashed_job_and_promotes_queue(tmp_path: pathlib.Path) -> None:
+    # Regression test: a worker that crashes mid-build never calls
+    # mark_failed itself (no exception ever reaches run_precompute_job's
+    # except block), so without this method, its row stays 'running' forever
+    # and anything queued behind it never gets a chance to run.
+    store = precompute_store.PrecomputeJobStore(tmp_path / 'jobs.sqlite')
+    _ = store.request('en', 5)
+    _ = store.request('fr', 6)  # queued behind 'en'/5
+
+    store.db.execute('UPDATE precompute_jobs SET updated_timestamp = ? WHERE lang = ? AND word_length = ?',
+                     (time.time() - 999, 'en', 5))
+
+    promoted = store.reclaim_stale_running()
+
+    assert promoted == ('fr', 6)
+    failed_status = store.get_status('en', 5)
+    assert failed_status.status == statics.PrecomputeStatus.FAILED
+    assert failed_status.error  # a real, non-empty explanation, not silently blank
+    assert store.get_status('fr', 6).status == statics.PrecomputeStatus.RUNNING
+    store.close()
+
+
+def test_reclaim_stale_running_with_no_queue_just_fails_the_stale_job(tmp_path: pathlib.Path) -> None:
+    store = precompute_store.PrecomputeJobStore(tmp_path / 'jobs.sqlite')
+    _ = store.request('en', 5)
+
+    store.db.execute('UPDATE precompute_jobs SET updated_timestamp = ? WHERE lang = ? AND word_length = ?',
+                     (time.time() - 999, 'en', 5))
+
+    assert store.reclaim_stale_running() is None  # nothing queued to promote
+    assert store.get_status('en', 5).status == statics.PrecomputeStatus.FAILED
+    store.close()
+
+
 def test_done_job_can_be_requested_again(tmp_path: pathlib.Path) -> None:
     store = precompute_store.PrecomputeJobStore(tmp_path / 'jobs.sqlite')
     _ = store.request('en', 5)

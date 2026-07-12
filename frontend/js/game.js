@@ -31,6 +31,13 @@ let finished = false;
 let isSubmitting = false;
 let currentTries = 0;
 let onExit = null;
+// Bumped by showGame() every time it (re)initializes the board/keyboard/
+// session - handleEnter() captures the value in effect when it starts and
+// re-checks it after every await, so a guess submission still in flight when
+// the user hits Reset/New Game (which don't otherwise coordinate with it)
+// discards its stale result instead of writing into the freshly-reset or
+// brand-new game.
+let gameGeneration = 0;
 // Full guess history, kept in sync alongside board/keyboard state - needed to
 // replay key statuses onto a freshly-rebuilt keyboard when the layout toggle
 // swaps QWERTY<->AZERTY mid-game.
@@ -70,13 +77,15 @@ function keyboardCallbacks() {
   };
 }
 
-async function updateHintsPanel(word, pattern) {
+async function updateHintsPanel(word, pattern, myGeneration) {
   if (session.game_mode !== GameMode.ASSISTED) return;
 
   try {
     const response = await getGuessStats(session.session_uuid, word, pattern);
+    if (myGeneration !== gameGeneration) return; // stale by the time the request resolved
     renderHints(el.hints, response.guess_stats);
   } catch {
+    if (myGeneration !== gameGeneration) return;
     renderHints(el.hints, null);
   }
 }
@@ -94,6 +103,7 @@ async function handleEnter() {
     return;
   }
 
+  const myGeneration = gameGeneration;
   isSubmitting = true;
   try {
     const word = board.getCurrentGuess();
@@ -101,6 +111,7 @@ async function handleEnter() {
     try {
       response = await submitGuess(session.session_uuid, word);
     } catch (err) {
+      if (myGeneration !== gameGeneration) return; // Reset/New Game ran while this was in flight - discard
       // ApiError means the backend was reached and rejected the guess
       // (invalid word, or no tries left) - that's the row's fault, shake it.
       // Anything else (network/timeout) isn't the guess's fault.
@@ -109,8 +120,11 @@ async function handleEnter() {
       return;
     }
 
+    if (myGeneration !== gameGeneration) return;
+
     const pattern = response.pattern;
     const statuses = await board.commitGuess(word, pattern);
+    if (myGeneration !== gameGeneration) return;
     statuses.forEach((status, i) => keyboard.setKeyStatus(word[i], status));
     guessHistory.words.push(word);
     guessHistory.patterns.push(pattern);
@@ -125,15 +139,20 @@ async function handleEnter() {
       finished = true;
       try {
         const wordResponse = await getWordToGuess(session.session_uuid);
+        if (myGeneration !== gameGeneration) return;
         showBanner('lose', `Out of tries. The word was ${(wordResponse.word || '?').toUpperCase()}.`);
       } catch {
+        if (myGeneration !== gameGeneration) return;
         showBanner('lose', 'Out of tries.');
       }
     }
 
-    await updateHintsPanel(word, pattern);
+    await updateHintsPanel(word, pattern, myGeneration);
   } finally {
-    isSubmitting = false;
+    // Don't clear the flag on behalf of a generation that's no longer
+    // current - the newer generation manages its own isSubmitting state
+    // (showGame() already reset it when it started).
+    if (myGeneration === gameGeneration) isSubmitting = false;
   }
 }
 
@@ -166,6 +185,11 @@ export function mountGame({ onExit: exitCallback }) {
   });
 
   el.newGame.addEventListener('click', async () => {
+    // Unlike Reset, this doesn't call showGame() (it navigates away to the
+    // setup screen instead) - bump the generation here too, or a guess
+    // submission still in flight would resume after this handler and act on
+    // now-destroyed/stale board/keyboard/session state.
+    gameGeneration += 1;
     el.newGame.disabled = true;
     try {
       await deleteGameSession(session.session_uuid);
@@ -199,6 +223,7 @@ export function mountGame({ onExit: exitCallback }) {
 }
 
 export async function showGame(sessionInfo, stats) {
+  gameGeneration += 1;
   session = {
     session_uuid: sessionInfo.session_uuid,
     lang: stats.lang,

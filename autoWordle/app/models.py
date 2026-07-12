@@ -29,6 +29,17 @@ class PrecomputeNotAllowedError(ValueError):
     """Raised when a precompute build is requested for an unknown language."""
 
 
+class NoTriesRemainingError(ValueError):
+    """Raised when `submit_guess` is called on a session with no tries left."""
+
+
+# Client-facing message for a precompute build failure - the real exception
+# (which can include internal file paths, e.g. a PermissionError's repr) is
+# logged server-side via `logger.exception` instead, same policy as
+# `webapp.api_views._INTERNAL_ERROR` for unexpected route failures.
+_PRECOMPUTE_FAILURE_MESSAGE = 'Build failed - see server logs for details'
+
+
 @dataclasses.dataclass
 class GameSession:
     """A live game session: JSON-serializable metadata plus the running solver state.
@@ -242,10 +253,15 @@ def submit_guess(session: GameSession, word: str) -> str | None:
         word (str): Guessed word.
 
     Returns:
-        str | None: The resulting emoji pattern, or `None` if the session has
-        no tries left or the guess is invalid.
+        str | None: The resulting emoji pattern, or `None` if the guess is invalid.
 
     Raises:
+        NoTriesRemainingError: If the session already has no tries left. A
+            distinct exception rather than folding into the `None` case below
+            - the two used to be indistinguishable to callers, so
+            `webapp.api_views.submit_guess` always reported both as
+            `INVALID_WORD`, telling a player who was simply out of tries that
+            their (possibly perfectly valid) word was invalid.
         GameSessionNotAllowedError: If the session is in `GAME_MODE_SOLVE`.
             That mode is for solving an *external* puzzle, where the pattern
             comes from outside (passed directly to `get_guess_stats`) rather
@@ -262,7 +278,7 @@ def submit_guess(session: GameSession, word: str) -> str | None:
         raise GameSessionNotAllowedError('submit_guess is not valid in GAME_MODE_SOLVE - use get_guess_stats instead')
 
     if session.meta.current_tries >= session.meta.max_tries:
-        return None
+        raise NoTriesRemainingError('No tries remaining for this session')
 
     t_pattern = session.game.submit_guess(tuple(ord(letter) - session.game.shift for letter in word))
 
@@ -357,6 +373,6 @@ def run_precompute_job(app_sources: schemas.AppSources, job_store: precompute_st
 
             current = job_store.mark_done(current_lang, current_word_length)
 
-        except Exception as err:
+        except Exception:
             logger.exception("Precompute job failed for %s/%d", current_lang, current_word_length)
-            current = job_store.mark_failed(current_lang, current_word_length, repr(err))
+            current = job_store.mark_failed(current_lang, current_word_length, _PRECOMPUTE_FAILURE_MESSAGE)

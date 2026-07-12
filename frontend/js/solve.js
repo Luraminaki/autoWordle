@@ -33,6 +33,12 @@ let letterInputs = [];
 let patternTiles = [];
 let patternStatuses = [];
 let onExit = null;
+// Bumped whenever a new solve session starts (showSolve) or the current one
+// ends (New Game) - handleSubmit() captures the value in effect when it
+// starts and re-checks it after its await, so a getGuessStats() call still in
+// flight when the user starts a new session doesn't append a stale guess
+// into the new session's history/hints.
+let solveGeneration = 0;
 
 function buildInputRow(wordLength) {
   el.inputRow.innerHTML = '';
@@ -134,9 +140,11 @@ async function handleSubmit() {
 
   const pattern = patternToEmoji(patternStatuses);
 
+  const myGeneration = solveGeneration;
   el.submit.disabled = true;
   try {
     const response = await getGuessStats(session.session_uuid, word, pattern);
+    if (myGeneration !== solveGeneration) return; // New Game started while this was in flight - discard
 
     if (!response.guess_stats) {
       el.error.textContent = 'No matching candidates - check the word and pattern';
@@ -149,9 +157,14 @@ async function handleSubmit() {
     renderHints(el.hints, response.guess_stats);
     resetInputs();
   } catch (err) {
+    if (myGeneration !== solveGeneration) return;
     el.error.textContent = err.message;
     el.error.hidden = false;
   } finally {
+    // Always re-enable, regardless of generation: unlike game.js's
+    // isSubmitting (re-initialized whenever a new game starts), nothing else
+    // resets el.submit.disabled for a fresh session - skipping this on a
+    // stale generation would leave the button stuck disabled forever.
     el.submit.disabled = false;
   }
 }
@@ -162,6 +175,11 @@ export function mountSolve({ onExit: exitCallback }) {
   el.submit.addEventListener('click', handleSubmit);
 
   el.newGame.addEventListener('click', async () => {
+    // Invalidate any handleSubmit() still awaiting getGuessStats() - this
+    // navigates away entirely (no showSolve() call here), so without this a
+    // late response would still append a stale guess to whatever session
+    // comes next.
+    solveGeneration += 1;
     el.newGame.disabled = true;
     try {
       await deleteGameSession(session.session_uuid);
@@ -184,6 +202,7 @@ export function mountSolve({ onExit: exitCallback }) {
 }
 
 export function showSolve(sessionInfo, stats) {
+  solveGeneration += 1;
   session = {
     session_uuid: sessionInfo.session_uuid,
     lang: stats.lang,

@@ -4,10 +4,13 @@
 import { requestPrecompute, precomputeProgressUrl } from './api.js';
 import { PrecomputeStatus } from './statics.js';
 
-// Not a PrecomputeStatus member on the Python side either (webapp/api_views.py's
-// `precompute_progress` SSE stream): it means "no job record exists at all" for
-// this lang/word_length, a distinct case from any actual job lifecycle state.
+// Not PrecomputeStatus members on the Python side either (webapp/api_views.py's
+// `precompute_progress` SSE stream) - both mean the stream itself couldn't
+// report real job state, distinct from any actual job lifecycle state:
+// 'not_found' means no job record exists at all for this lang/word_length;
+// 'error' means the generator hit an unexpected server-side exception.
 const SSE_JOB_NOT_FOUND = 'not_found';
+const SSE_STREAM_ERROR = 'error';
 
 function formatEta(seconds) {
   if (seconds == null) return '';
@@ -55,6 +58,12 @@ export async function runPrecompute(lang, wordLength, { barEl, fillEl, statusEl,
     if (payload.status === SSE_JOB_NOT_FOUND) {
       source.close();
       onError('Precompute job not found');
+      return;
+    }
+
+    if (payload.status === SSE_STREAM_ERROR) {
+      source.close();
+      onError(payload.error || 'Precompute progress stream failed');
       return;
     }
 

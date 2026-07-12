@@ -108,16 +108,21 @@ async def create_game_session(request: api_schemas.CreateGameSessionRequest) -> 
         # the cap is correct no matter what any other endpoint was called.
         _ = SESSION_STORE.delete_expired(APP_SOURCES.config.session_ttl_seconds)
 
-        if SESSION_STORE.count() >= APP_SOURCES.config.max_sessions:
-            return api_schemas.CreateGameSessionResponse(status=statics.StatusFunction.ERROR, error='MAX_SESSIONS limit reached')
-
         lang = request.lang.lower()
         lang_source = APP_SOURCES.langs.get(lang)
         precomputed = lang_source.pre_computed.get(str(request.word_length)) if lang_source else None
         lang_launcher = precomputed.lang_launcher if precomputed else None
 
         session = models.create_game_session(lang, request.word_length, lang_launcher, request.game_mode, request.max_tries)
-        SESSION_STORE.save(session)
+
+        # Count-and-insert happens atomically inside save_if_under_limit -
+        # a separate count() check followed by save() would be a
+        # check-then-act race letting concurrent requests exceed the cap.
+        if not SESSION_STORE.save_if_under_limit(session, APP_SOURCES.config.max_sessions):
+            return api_schemas.CreateGameSessionResponse(status=statics.StatusFunction.ERROR, error='MAX_SESSIONS limit reached')
+
+    except models.GameSessionNotAllowedError as err:
+        return api_schemas.CreateGameSessionResponse(status=statics.StatusFunction.ERROR, error=str(err))
 
     except Exception:
         logger.exception("Failed to create game session")
@@ -222,6 +227,9 @@ async def submit_guess(request: api_schemas.SubmitGuessRequest) -> api_schemas.S
 
         SESSION_STORE.save(session)
 
+    except models.NoTriesRemainingError:
+        return api_schemas.SubmitGuessResponse(status=statics.StatusFunction.ERROR, error='NO_TRIES_REMAINING')
+
     except Exception:
         logger.exception("Failed to submit guess")
         return api_schemas.SubmitGuessResponse(status=statics.StatusFunction.ERROR, error=_INTERNAL_ERROR)
@@ -244,6 +252,14 @@ async def precompute(request: api_schemas.PrecomputeRequest, background_tasks: B
         # pattern as create_game_session's SESSION_STORE.delete_expired call -
         # otherwise DONE/FAILED rows accumulate in precompute_jobs.sqlite forever.
         _ = PRECOMPUTE_STORE.prune_finished(precompute_store.FINISHED_RETENTION_SECONDS)
+
+        # A crashed worker never marks its own job failed - opportunistically
+        # detect and reclaim that here too (not just from the SSE loop below),
+        # so a queue stuck behind a dead worker gets a chance to recover even
+        # if nobody has an active /precompute_progress connection open.
+        promoted = PRECOMPUTE_STORE.reclaim_stale_running()
+        if promoted is not None:
+            background_tasks.add_task(models.run_precompute_job, APP_SOURCES, PRECOMPUTE_STORE, *promoted)
 
         lang = request.lang.lower()
         result = models.request_precompute(APP_SOURCES, PRECOMPUTE_STORE, lang, request.word_length)
@@ -305,19 +321,38 @@ async def precompute_progress(lang: str, word_length: int) -> StreamingResponse:
     lang_lower = lang.lower()
 
     async def event_stream():
-        while True:
-            job = PRECOMPUTE_STORE.get_status(lang_lower, word_length)
+        try:
+            while True:
+                # See PrecomputeJobStore.reclaim_stale_running's docstring -
+                # this store can detect a crashed worker's abandoned job but
+                # can't run anything itself, so any open SSE connection
+                # (watching any job, not necessarily the stale one) is what
+                # actually restarts a queue stuck behind it.
+                promoted = PRECOMPUTE_STORE.reclaim_stale_running()
+                if promoted is not None:
+                    asyncio.get_running_loop().run_in_executor(
+                        None, models.run_precompute_job, APP_SOURCES, PRECOMPUTE_STORE, *promoted)
 
-            if job is None:
-                yield f"data: {json.dumps({'status': 'not_found'})}\n\n"
-                return
+                job = PRECOMPUTE_STORE.get_status(lang_lower, word_length)
 
-            yield f"data: {json.dumps(_precompute_progress_payload(job))}\n\n"
+                if job is None:
+                    yield f"data: {json.dumps({'status': 'not_found'})}\n\n"
+                    return
 
-            if job.status in (statics.PrecomputeStatus.DONE, statics.PrecomputeStatus.FAILED):
-                return
+                yield f"data: {json.dumps(_precompute_progress_payload(job))}\n\n"
 
-            await asyncio.sleep(_PROGRESS_POLL_INTERVAL_SECONDS)
+                if job.status in (statics.PrecomputeStatus.DONE, statics.PrecomputeStatus.FAILED):
+                    return
+
+                await asyncio.sleep(_PROGRESS_POLL_INTERVAL_SECONDS)
+
+        except Exception:
+            # Every other route in this module wraps its body the same way -
+            # log the real exception server-side and hand the client a safe,
+            # documented shape instead of just letting the stream die with no
+            # explanation.
+            logger.exception("Precompute progress stream failed for %s/%d", lang_lower, word_length)
+            yield f"data: {json.dumps({'status': 'error', 'error': _INTERNAL_ERROR})}\n\n"
 
     return StreamingResponse(event_stream(), media_type='text/event-stream')
 

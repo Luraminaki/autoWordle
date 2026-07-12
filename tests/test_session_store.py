@@ -3,6 +3,7 @@
 
 #===================================================================================================
 import pathlib
+import threading
 import time
 
 from autoWordle.app import models, schemas, session_store
@@ -141,6 +142,69 @@ def test_delete_expired(tmp_path: pathlib.Path, mini_words_file: pathlib.Path) -
 
     assert deleted == 1
     assert store.count() == 0
+    store.close()
+
+
+def test_save_if_under_limit_saves_when_under_cap(tmp_path: pathlib.Path, mini_words_file: pathlib.Path) -> None:
+    app_sources = _build_app_sources(tmp_path, mini_words_file)
+    lang_launcher = app_sources.langs['mini'].pre_computed['5'].lang_launcher
+    store = session_store.SessionStore(tmp_path / 'sessions.sqlite', app_sources)
+
+    session = models.create_game_session('mini', 5, lang_launcher, statics.GameMode.GAME_MODE_PLAY, max_tries=6)
+
+    assert store.save_if_under_limit(session, max_sessions=5) is True
+    assert store.count() == 1
+    assert store.load(session.meta.session_uuid) is not None
+    store.close()
+
+
+def test_save_if_under_limit_rejects_when_at_cap(tmp_path: pathlib.Path, mini_words_file: pathlib.Path) -> None:
+    app_sources = _build_app_sources(tmp_path, mini_words_file)
+    lang_launcher = app_sources.langs['mini'].pre_computed['5'].lang_launcher
+    store = session_store.SessionStore(tmp_path / 'sessions.sqlite', app_sources)
+
+    for _ in range(5):
+        session = models.create_game_session('mini', 5, lang_launcher, statics.GameMode.GAME_MODE_PLAY, max_tries=6)
+        assert store.save_if_under_limit(session, max_sessions=5) is True
+
+    one_too_many = models.create_game_session('mini', 5, lang_launcher, statics.GameMode.GAME_MODE_PLAY, max_tries=6)
+    assert store.save_if_under_limit(one_too_many, max_sessions=5) is False
+    assert store.count() == 5
+    assert store.load(one_too_many.meta.session_uuid) is None
+    store.close()
+
+
+def test_save_if_under_limit_is_race_free_under_real_concurrency(tmp_path: pathlib.Path, mini_words_file: pathlib.Path) -> None:
+    # Regression test: a separate count() check followed by a separate save()
+    # call is a check-then-act race - two concurrent callers could both
+    # observe a count under the cap before either had inserted, exceeding it.
+    # save_if_under_limit does both inside one held lock instead, so firing
+    # genuinely concurrent threads at it must never let more than max_sessions
+    # succeed, regardless of scheduling.
+    app_sources = _build_app_sources(tmp_path, mini_words_file)
+    lang_launcher = app_sources.langs['mini'].pre_computed['5'].lang_launcher
+    store = session_store.SessionStore(tmp_path / 'sessions.sqlite', app_sources)
+
+    max_sessions = 5
+    thread_count = 20
+    results: list[bool] = []
+    results_lock = threading.Lock()
+
+    def worker() -> None:
+        session = models.create_game_session('mini', 5, lang_launcher, statics.GameMode.GAME_MODE_PLAY, max_tries=6)
+        saved = store.save_if_under_limit(session, max_sessions)
+        with results_lock:
+            results.append(saved)
+
+    threads = [threading.Thread(target=worker) for _ in range(thread_count)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+
+    assert results.count(True) == max_sessions
+    assert results.count(False) == thread_count - max_sessions
+    assert store.count() == max_sessions
     store.close()
 
 
