@@ -9,6 +9,9 @@ description = "Wordle / Motus solver game web app."
 readme = "README.md"
 requires-python = ">=3.12"
 license = { text = "GPL-3.0-only" }
+authors = [
+    { name = "Luraminaki" },
+]
 dependencies = [
     "fastapi",
     "fastapi-cli",
