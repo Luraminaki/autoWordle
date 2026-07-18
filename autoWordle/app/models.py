@@ -467,7 +467,7 @@ def run_precompute_job(app_sources: schemas.AppSources, job_store: precompute_st
                                                 progress_callback=progress_callback)
 
             app_sources.langs[current_lang].pre_computed[str(current_word_length)] = schemas.PrecomputedEntry(
-                path=lang_file, length=current_word_length, lang_launcher=new_launcher)
+                path=lang_file, length=current_word_length, lang_launcher=new_launcher, has_exhaustive_data=True)
 
             current = job_store.mark_done(current_lang, current_word_length)
 

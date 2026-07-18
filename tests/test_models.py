@@ -169,6 +169,32 @@ def test_build_client_view_picks_up_build_from_another_worker(test_app_root: pat
     job_store.close()
 
 
+def test_build_client_view_reports_exhaustive_data_right_after_its_own_build(test_app_root: pathlib.Path) -> None:
+    # Regression test: run_precompute_job used to construct the fresh
+    # PrecomputedEntry without has_exhaustive_data=True (defaulting to
+    # False), even though it had just built real exhaustive data. This never
+    # surfaced while /get_app_sources always re-derived the flag fresh from
+    # disk on every call - but build_client_view instead trusts this
+    # in-memory flag directly (to avoid redoing that scan), so the bug
+    # became directly observable: the "Build solver data" button's own
+    # worker would report has_exhaustive_data=False for the very combo it
+    # just finished building, leaving Start disabled forever after a
+    # same-worker build (no second "different worker" involved at all,
+    # unlike the cross-worker discovery test above).
+    from autoWordle.app import precompute_store
+
+    app_sources = models.init_app_sources(app_root=test_app_root)
+    job_store = precompute_store.PrecomputeJobStore(test_app_root / 'jobs.sqlite')
+
+    _ = models.request_precompute(app_sources, job_store, 'mini', 5)
+    models.run_precompute_job(app_sources, job_store, 'mini', 5)
+
+    client_view = models.build_client_view(app_sources)
+
+    assert client_view.langs['mini'].pre_computed['5'].has_exhaustive_data is True
+    job_store.close()
+
+
 def test_submit_guess_raises_when_no_tries_remaining(test_app_root: pathlib.Path) -> None:
     # Regression test: this used to return None, indistinguishable from an
     # invalid word - webapp.api_views.submit_guess then always reported both

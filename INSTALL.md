@@ -81,10 +81,12 @@ how the web UI itself works.
 restarts the process on every change, which forces a single worker process
 and adds file-watching overhead you don't want under real traffic. For
 production, drop it and add `--workers` instead (sized to available CPU
-cores):
+cores), and bind explicitly with `--host 0.0.0.0` - uvicorn otherwise
+defaults to `127.0.0.1` (loopback-only), which isn't reachable from outside
+the machine/container it's running on:
 
 ```bash
-uvicorn autoWordle.main:app --port 10000 --workers 4
+uvicorn autoWordle.main:app --host 0.0.0.0 --port 10000 --workers 4
 ```
 
 The app reads `config.json` and the `data/` folder relative to the current
