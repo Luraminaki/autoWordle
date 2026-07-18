@@ -78,17 +78,19 @@ def convert_elimination_suggestions(suggestions: list[WordsInformation | None],
         shift (int): Ordinal shift used to decode letters back to characters.
 
     Returns:
-        dict[int, list[dict[str, float]]]: Suggestions keyed by rank (1-indexed).
+        dict[int, list[dict[str, float]]]: Suggestions keyed by number of
+        unknown letters covered (0 to word_length) - the same index
+        `suggestions` itself already uses, not shifted by one.
     """
     elimination_suggestions: dict[int, list[dict[str, float]]] = {}
 
-    for rank, ranked_suggestions in enumerate(suggestions):
+    for nb_letters_covered, ranked_suggestions in enumerate(suggestions):
         if not ranked_suggestions:
             continue
 
         temp_suggs = [{''.join(chr(ord_letter + shift) for ord_letter in suggestion): round(information, 5)}
                       for suggestion, information in ranked_suggestions]
 
-        elimination_suggestions[rank + 1] = elimination_suggestions.get(rank + 1, []) + temp_suggs
+        elimination_suggestions[nb_letters_covered] = elimination_suggestions.get(nb_letters_covered, []) + temp_suggs
 
     return elimination_suggestions

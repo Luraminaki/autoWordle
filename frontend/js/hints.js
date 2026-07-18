@@ -95,7 +95,7 @@ export function renderHints(container, guessStats) {
     suggHeading.textContent = 'Elimination suggestions';
     container.appendChild(suggHeading);
 
-    for (const rank of rankKeys.sort((a, b) => Number(a) - Number(b))) {
+    for (const rank of rankKeys.sort((a, b) => Number(b) - Number(a))) {
       const suggestions = guessStats.elimination_suggestions[rank];
       const group = document.createElement('div');
       group.className = 'elimination-group';
