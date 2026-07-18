@@ -204,8 +204,8 @@ def test_delete_game_session(client: TestClient) -> None:
 
 
 def test_precompute_builds_and_progress_reports_done(client: TestClient) -> None:
-    # `mini` starts with `compute_best_opening=False` (see conftest's
-    # test config), so GAME_MODE_SOLVE isn't allowed for it yet.
+    # `mini` has no `*_info.csv` marker on disk yet at this point, so
+    # GAME_MODE_SOLVE isn't allowed for it yet.
     solve_before = client.post('/api/app/create_game_session',
                                json={'lang': 'mini', 'word_length': 5, 'max_tries': 6, 'game_mode': 'GAME_MODE_SOLVE'})
     assert solve_before.json()['status'] == 'ERROR'

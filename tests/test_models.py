@@ -98,8 +98,8 @@ def test_refresh_lang_launcher_if_stale_picks_up_build_from_another_worker(test_
     worker_a_sources = models.init_app_sources(app_root=test_app_root)
     worker_b_sources = models.init_app_sources(app_root=test_app_root)
 
-    # Neither worker sees exhaustive data for mini/5 yet (test config has
-    # compute_best_opening=False).
+    # Neither worker sees exhaustive data for mini/5 yet (no `*_info.csv`
+    # marker exists for it in the test data folder).
     assert not worker_a_sources.langs['mini'].pre_computed['5'].lang_launcher.words_information
     assert not worker_b_sources.langs['mini'].pre_computed['5'].lang_launcher.words_information
 
@@ -273,7 +273,7 @@ def test_get_initial_hints_returns_none_without_exhaustive_data(test_app_root: p
 
     app_sources = models.init_app_sources(app_root=test_app_root)
     lang_launcher = app_sources.langs['mini'].pre_computed['5'].lang_launcher
-    assert not lang_launcher.words_information  # test config has compute_best_opening=False
+    assert not lang_launcher.words_information  # no `*_info.csv` marker for mini/5 in the test data folder
 
     meta = schemas.GameSessionMeta(session_uuid='test', lang='mini', word_length=5,
                                    game_mode=statics.GameMode.GAME_MODE_ASSISTED, max_tries=6,

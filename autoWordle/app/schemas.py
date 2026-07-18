@@ -36,7 +36,6 @@ class AppConfig(BaseModel):
     service_id: str
     logging_level: str
     data_folder: str
-    compute_best_opening: bool = False
     max_sessions: int = Field(alias='MAX_SESSIONS', gt=0)
     session_ttl_seconds: int = Field(alias='SESSION_TTL_SECONDS', gt=0)
     # Defaulted (not required) so existing config.json files keep working

@@ -16,7 +16,7 @@ def test_init_lang_app_data_always_builds_default_word_length(tmp_path: pathlib.
     # No exhaustive marker files at all - this must still produce a bare
     # LangLauncher for the default word length (regression test for the
     # "fresh install never builds anything" bug).
-    app_sources = helpers.init_lang_app_data([lang_file], [], default_word_lengths=[5], compute_best_opening=False)
+    app_sources = helpers.init_lang_app_data([lang_file], [], default_word_lengths=[5])
 
     assert 'mini' in app_sources
     pre_computed = app_sources['mini']['pre_computed']

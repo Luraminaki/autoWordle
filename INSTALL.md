@@ -13,6 +13,7 @@ Requires **Python 3.12+**.
   - [Linux (Debian / Ubuntu)](#linux-debian--ubuntu)
   - [Linux (Arch)](#linux-arch)
   - [Running the app](#running-the-app)
+  - [config.json reference](#configjson-reference)
   - [Running the tests](#running-the-tests)
   - [Regenerating solver data for a new language/word length](#regenerating-solver-data-for-a-new-languageword-length)
 
@@ -100,6 +101,30 @@ AUTOWORDLE_APP_ROOT=/path/to/autoWordle uvicorn autoWordle.main:app --port 10000
 
 The API is served under `/api/app/...` (see `autoWordle/webapp/api_views.py`); interactive
 docs are available at `/docs` once the app is running.
+
+## config.json reference
+
+Validated by `autoWordle/app/schemas.py`'s `AppConfig` - an invalid or
+incomplete `config.json` fails fast at startup rather than falling back to
+silent defaults for a *required* key. The version number is deliberately
+**not** here - it's read from installed package metadata instead (see
+[VERSION](README.md#version)).
+
+| Key | Type | Required? | Description |
+| --- | --- | --- | --- |
+| `service_id` | string | **Required** | Arbitrary identifier for this deployment/instance. Not read anywhere else in the app yet - reserved for future use (e.g. distinguishing instances in logs/metrics). |
+| `logging_level` | string | **Required** | Root logging level: `"DEBUG"`, `"INFO"`, `"WARNING"`, `"ERROR"`, or `"CRITICAL"` (see `app/logging_utils.py`). |
+| `data_folder` | string | **Required** | Path, relative to the app root, where word lists (`*.txt`) and generated solver/session data live, e.g. `"data/"`. |
+| `MAX_SESSIONS` | integer (> 0) | **Required** | Maximum concurrent game sessions before `POST /create_game_session` starts rejecting new ones. |
+| `SESSION_TTL_SECONDS` | integer (> 0) | **Required** | Inactivity timeout, in seconds, after which a session is garbage-collected (30 min in the shipped config). |
+| `DEFAULT_RATE_LIMIT_PER_MINUTE` | integer (> 0) | Optional (default `60`) | Per-client-IP request budget for the API as a whole (see [ARCHITECTURE](README.md#architecture)). |
+| `PRECOMPUTE_RATE_LIMIT_PER_MINUTE` | integer (> 0) | Optional (default `5`) | Stricter per-client-IP budget specifically for `POST /precompute`, since a build can run for minutes of real CPU time. |
+| `default_word_lengths` | list of integers | Optional (default `[5]`) | Word length(s) every language always gets a plain, `GAME_MODE_PLAY`-capable word list built for at startup, regardless of whether exhaustive solver data has been precomputed for that length yet. |
+
+Exhaustive solver data for a new language/length is always built via an
+explicit `POST /precompute` (or the "Build solver data" button), never
+automatically at startup - see
+[Regenerating solver data](#regenerating-solver-data-for-a-new-languageword-length).
 
 ## Running the tests
 

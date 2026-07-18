@@ -2,9 +2,9 @@
     "service_id": "wordle",
     "logging_level": "INFO",
     "data_folder": "data/",
-    "compute_best_opening": true,
     "MAX_SESSIONS": 5,
     "SESSION_TTL_SECONDS": 1800,
     "DEFAULT_RATE_LIMIT_PER_MINUTE": 60,
-    "PRECOMPUTE_RATE_LIMIT_PER_MINUTE": 5
+    "PRECOMPUTE_RATE_LIMIT_PER_MINUTE": 5,
+    "default_word_lengths": [5]
 }

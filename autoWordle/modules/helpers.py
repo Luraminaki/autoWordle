@@ -179,7 +179,6 @@ class LangLauncher:
 def init_lang_app_data(lang_files: list[pathlib.Path],
                        exhaustive_files: list[pathlib.Path],
                        default_word_lengths: list[int] | tuple[int, ...] = (5,),
-                       compute_best_opening: bool = False,
                        client: bool = False) -> dict[str, dict]:
     """Build the raw (pre-Pydantic) app source mapping for every language found.
 
@@ -191,23 +190,21 @@ def init_lang_app_data(lang_files: list[pathlib.Path],
     only other source of word lengths to build is markers *produced by*
     already having built one.
 
-    `compute_best_opening` (expensive: `O(n**2)` in the word count) is only
-    ever honored for a length that already has a discovered marker - i.e. one
-    some prior run was deliberately asked to precompute. A `default_word_lengths`
-    entry with no marker yet always gets a cheap, bare `LangLauncher` (plain
-    word list only, no exhaustive data), regardless of `compute_best_opening`.
-    Otherwise, turning `compute_best_opening` on would silently make *every*
-    language eagerly precompute exhaustive data for `default_word_lengths` on
-    first boot - fine for a small curated answer list, but multi-minute and
-    multi-gigabyte for a large dictionary that was never meant to get it.
+    Never eagerly computes exhaustive data here - `LangLauncher` only *loads*
+    already-precomputed data for a length with a discovered marker (cheap),
+    and does nothing for a `default_word_lengths` entry with no marker yet
+    (also cheap, `GAME_MODE_PLAY`-only). Actually building fresh exhaustive
+    data is always a deliberate, explicit act (`POST /precompute`, the "Build
+    solver data" button, or the CLI command in INSTALL.md) - never triggered
+    just by finding a language at startup, which would otherwise silently
+    make *every* language eagerly precompute on first boot - fine for a small
+    curated answer list, but multi-minute and multi-gigabyte for a large
+    dictionary that was never meant to get it.
 
     Args:
         lang_files (list[pathlib.Path]): Plain word list files (one language each).
         exhaustive_files (list[pathlib.Path]): `*_info.csv` markers of completed exhaustive precomputation.
         default_word_lengths (list[int] | tuple[int, ...]): Word lengths to always build a `LangLauncher` for.
-        compute_best_opening (bool): Whether to compute (and persist) exhaustive data
-            for language/length combinations that already have a marker but are
-            missing their sidecar files.
         client (bool): When `True`, produce a JSON-serializable view (no live
             `LangLauncher` instances) suitable for `schemas.LangSource.model_validate`.
 
@@ -225,14 +222,12 @@ def init_lang_app_data(lang_files: list[pathlib.Path],
                               for exhaustive_file in exhaustive_files if lang_file.stem in exhaustive_file.stem}
 
         for word_length in discovered_lengths | set(default_word_lengths):
-            build_exhaustive = compute_best_opening if word_length in discovered_lengths else False
-
             pre_computed = {'path': lang_file if not client else lang_file.name,
                             'length': word_length,
                             # `str(LangLauncher)` (the class, not an instance) never actually
                             # invokes `LangLauncher.__str__` - it gives "<class '...'>". Use
                             # `__name__` directly for the intended plain "LangLauncher" placeholder.
-                            'lang_launcher': LangLauncher(lang_file, build_exhaustive, word_length) if not client else LangLauncher.__name__,
+                            'lang_launcher': LangLauncher(lang_file, word_length=word_length) if not client else LangLauncher.__name__,
                             # Whether this length has a real `*_info.csv` marker on disk, as
                             # opposed to a bare `default_word_lengths` entry with only a plain
                             # word list (PLAY-mode only) - the only signal a client can use to

@@ -34,7 +34,6 @@ def test_app_root(tmp_path: pathlib.Path) -> pathlib.Path:
         'service_id': 'wordle-test',
         'logging_level': 'INFO',
         'data_folder': 'data/',
-        'compute_best_opening': False,
         'MAX_SESSIONS': 5,
         'SESSION_TTL_SECONDS': 1800,
         'default_word_lengths': [5],

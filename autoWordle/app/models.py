@@ -92,10 +92,7 @@ def init_app_sources(app_root: pathlib.Path | None = None, client: bool = False)
     lang_files = list(data_folder.glob('*.txt'))
     exhaustive_files = list(data_folder.glob('*_info.csv'))
 
-    compute_best_opening = not client if client else conf.compute_best_opening
-    langs_raw = helpers.init_lang_app_data(lang_files, exhaustive_files, conf.default_word_lengths,
-                                           compute_best_opening=compute_best_opening,
-                                           client=client)
+    langs_raw = helpers.init_lang_app_data(lang_files, exhaustive_files, conf.default_word_lengths, client=client)
     game_modes = {mode.name: mode.value for mode in statics.GameMode}
 
     if client:
@@ -226,9 +223,8 @@ def create_game_session(lang: str, word_length: int, lang_launcher: helpers.Lang
     if lang_launcher is None:
         raise GameSessionNotAllowedError('No solver data available for the requested language/word length')
 
-    # Not every LangLauncher has exhaustive data even when the app-wide
-    # `compute_best_opening` config flag is on - it's only computed/loaded
-    # for language/length combinations explicitly precomputed on disk (see
+    # Not every LangLauncher has exhaustive data - it's only loaded for
+    # language/length combinations already precomputed on disk (see
     # `helpers.init_lang_app_data`), so this must be checked per-launcher.
     if not lang_launcher.words_information and game_mode != statics.GameMode.GAME_MODE_PLAY:
         raise GameSessionNotAllowedError(f'{game_mode.value} requires exhaustive solver data for this language/length')
