@@ -508,6 +508,12 @@ main {
   text-transform: uppercase;
   padding: 0;
   font-size: 0.85rem;
+  transition: transform 0.1s ease, filter 0.1s ease;
+}
+
+.key.pressed {
+  transform: scale(0.9);
+  filter: brightness(0.85);
 }
 
 .key.wide {

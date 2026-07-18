@@ -29,6 +29,7 @@ const LAYOUT_ROWS = {
 export function createKeyboard(container, { onLetter, onEnter, onBackspace }, layout = KeyboardLayout.QWERTY) {
   container.innerHTML = '';
   const keyEls = new Map();
+  const allKeyEls = new Map();
 
   for (const row of LAYOUT_ROWS[layout] || LAYOUT_ROWS[KeyboardLayout.QWERTY]) {
     const rowEl = document.createElement('div');
@@ -43,12 +44,26 @@ export function createKeyboard(container, { onLetter, onEnter, onBackspace }, la
       btn.addEventListener('click', () => handleKey(key));
       rowEl.appendChild(btn);
       if (key.length === 1) keyEls.set(key, btn);
+      allKeyEls.set(key, btn);
     }
 
     container.appendChild(rowEl);
   }
 
+  // Physical key presses don't trigger the on-screen button's own `:active`
+  // state, and a fast click's `:active` window is often too short to
+  // register visually - so press feedback is driven explicitly here instead,
+  // covering both input paths the same way.
+  function flashPress(key) {
+    const btn = allKeyEls.get(key);
+    if (!btn) return;
+
+    btn.classList.add('pressed');
+    window.setTimeout(() => btn.classList.remove('pressed'), 120);
+  }
+
   function handleKey(key) {
+    flashPress(key);
     if (key === 'enter') onEnter();
     else if (key === 'backspace') onBackspace();
     else onLetter(key);
