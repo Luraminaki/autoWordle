@@ -9,13 +9,19 @@ I had a couple of goals this time around:
 
 It's still a "work in progress" as of now... And there is a lot of room for improvement.
 
+## VERSION
+
+The current version lives in [pyproject.toml](pyproject.toml) and is read from package
+metadata at runtime. See [CHANGELOG.md](CHANGELOG.md) for the full version history.
+
 ## TABLE OF CONTENT
 
 <!-- TOC -->
 
 - [autoWordle](#autowordle)
-  - [TABLE OF CONTENT](#table-of-content)
   - [VERSION](#version)
+  - [TABLE OF CONTENT](#table-of-content)
+  - [TL;DR](#tldr)
   - [ARCHITECTURE](#architecture)
   - [THE SOLVER](#the-solver)
   - [PROJECT LAYOUT](#project-layout)
@@ -25,10 +31,9 @@ It's still a "work in progress" as of now... And there is a lot of room for impr
 
 <!-- /TOC -->
 
-## VERSION
+## TL;DR
 
-The current version lives in [pyproject.toml](pyproject.toml) and is read from package
-metadata at runtime. See [CHANGELOG.md](CHANGELOG.md) for the full version history.
+"I don't want to install anything or read anything, just make it quick and easy please." I hear you say? Sure, just click [here](https://autowordle.onrender.com) and have fun. 
 
 ## ARCHITECTURE
 
