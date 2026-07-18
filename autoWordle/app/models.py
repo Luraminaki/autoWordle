@@ -286,6 +286,45 @@ def get_word_to_guess(session: GameSession) -> str:
     return ''.join(chr(ord_letter + session.game.shift) for ord_letter in session.game.word)
 
 
+def get_initial_hints(session: GameSession) -> schemas.GuessStats | None:
+    """Report solver hints for the state before any guess has been made.
+
+    `wordle.Wordle.best_guesses` (what `get_guess_stats` ranks candidates
+    from) starts empty and is only populated by `submit_guess_and_pattern` -
+    there's nothing to narrow yet at the start of a fresh game, so it stays
+    empty until the first guess. The language's precomputed exhaustive
+    entropy ranking (`language_launcher.words_information` - the same data
+    that powers the "best opening word" suggestion) is exactly the initial,
+    unnarrowed equivalent, so this uses that instead.
+
+    Args:
+        session (GameSession): Session to inspect.
+
+    Returns:
+        schemas.GuessStats | None: Solver statistics for the full initial
+        pool, or `None` outside `GAME_MODE_ASSISTED`, or if exhaustive data
+        isn't available for this language/length.
+    """
+    if session.meta.game_mode != statics.GameMode.GAME_MODE_ASSISTED:
+        return None
+
+    game = session.game
+    words_information = game.language_launcher.words_information
+    if not words_information:
+        return None
+
+    pool_letters, pool_letters_dupes = computing.gather_pool_letters(words_information)
+    suggestions = computing.build_suggestion(words_information, pool_letters, pool_letters_dupes, game.letter_extractor)
+    best_guess = words_information[0]
+
+    return schemas.GuessStats(pool_words=display.convert_pool_words(words_information, game.shift),
+                              pool_letters=display.convert_pool_letters(pool_letters, game.shift),
+                              pool_letters_dupes=display.convert_pool_letters_dupes(pool_letters_dupes, game.shift),
+                              elimination_suggestions=display.convert_elimination_suggestions(suggestions, game.shift),
+                              best_guess=display.convert_best_guess(best_guess, game.shift),
+                              information=game.information)
+
+
 def get_guess_stats(session: GameSession, word: str, pattern: str) -> schemas.GuessStats | None:
     """Compute elimination/solver statistics for a guess and its resulting pattern.
 

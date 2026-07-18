@@ -219,6 +219,23 @@ async def get_guess_stats(request: api_schemas.GuessStatsRequest) -> api_schemas
     return api_schemas.GuessStatsResponse(status=statics.StatusFunction.SUCCESS, guess_stats=stats)
 
 
+@route.post('/get_initial_hints')
+async def get_initial_hints(request: api_schemas.InitialHintsRequest) -> api_schemas.GuessStatsResponse:
+    """Report solver hints for the state before any guess has been made (Assisted mode)."""
+    try:
+        session = SESSION_STORE.load(request.session_uuid)
+        if session is None:
+            raise KeyError(request.session_uuid)
+
+        stats = models.get_initial_hints(session)
+
+    except Exception:
+        logger.exception("Failed to get initial hints")
+        return api_schemas.GuessStatsResponse(status=statics.StatusFunction.ERROR, error=_INTERNAL_ERROR)
+
+    return api_schemas.GuessStatsResponse(status=statics.StatusFunction.SUCCESS, guess_stats=stats)
+
+
 @route.post('/submit_guess')
 async def submit_guess(request: api_schemas.SubmitGuessRequest) -> api_schemas.SubmitGuessResponse:
     """Submit a guess against a session's hidden word."""

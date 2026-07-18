@@ -230,3 +230,54 @@ def test_submit_guess_and_get_stats_round_trip(test_app_root: pathlib.Path) -> N
     stats = models.get_game_session_stats(session)
     assert stats.current_tries == 1
     assert stats.guesses == [word_str]
+
+
+def test_get_initial_hints_reports_best_opening_before_any_guess(test_app_root: pathlib.Path) -> None:
+    from autoWordle.app import precompute_store
+
+    app_sources = models.init_app_sources(app_root=test_app_root)
+    job_store = precompute_store.PrecomputeJobStore(test_app_root / 'jobs.sqlite')
+    _ = models.request_precompute(app_sources, job_store, 'mini', 5)
+    models.run_precompute_job(app_sources, job_store, 'mini', 5)
+    lang_launcher = app_sources.langs['mini'].pre_computed['5'].lang_launcher
+
+    session = models.create_game_session('mini', 5, lang_launcher, statics.GameMode.GAME_MODE_ASSISTED, max_tries=6)
+
+    hints = models.get_initial_hints(session)
+
+    assert hints is not None
+    assert hints.best_guess is not None
+    assert len(hints.pool_words) == 20  # the whole mini.txt list - nothing guessed yet
+    assert hints.information > 0
+    # Nothing was actually guessed - get_initial_hints must not mutate session state.
+    assert session.meta.guesses == []
+    assert session.meta.current_tries == 0
+    job_store.close()
+
+
+def test_get_initial_hints_returns_none_for_play_mode(test_app_root: pathlib.Path) -> None:
+    app_sources = models.init_app_sources(app_root=test_app_root)
+    lang_launcher = app_sources.langs['mini'].pre_computed['5'].lang_launcher
+
+    session = models.create_game_session('mini', 5, lang_launcher, statics.GameMode.GAME_MODE_PLAY, max_tries=6)
+
+    assert models.get_initial_hints(session) is None
+
+
+def test_get_initial_hints_returns_none_without_exhaustive_data(test_app_root: pathlib.Path) -> None:
+    # Defensive guard: create_game_session already refuses to create an
+    # ASSISTED session without exhaustive data, so this shouldn't be
+    # reachable via the normal flow - constructs the session directly to
+    # confirm get_initial_hints doesn't assume that invariant blindly.
+    from autoWordle.modules import wordle
+
+    app_sources = models.init_app_sources(app_root=test_app_root)
+    lang_launcher = app_sources.langs['mini'].pre_computed['5'].lang_launcher
+    assert not lang_launcher.words_information  # test config has compute_best_opening=False
+
+    meta = schemas.GameSessionMeta(session_uuid='test', lang='mini', word_length=5,
+                                   game_mode=statics.GameMode.GAME_MODE_ASSISTED, max_tries=6,
+                                   created_timestamp=0, last_active_timestamp=0)
+    session = models.GameSession(meta=meta, game=wordle.Wordle(lang_launcher))
+
+    assert models.get_initial_hints(session) is None

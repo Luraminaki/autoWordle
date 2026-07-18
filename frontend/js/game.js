@@ -1,6 +1,6 @@
 // Play/Assisted screen controller: wires board + keyboard [+ hints panel].
 
-import { submitGuess, getWordToGuess, getGuessStats, resetGameSession, deleteGameSession, ApiError } from './api.js';
+import { submitGuess, getWordToGuess, getGuessStats, getInitialHints, resetGameSession, deleteGameSession, ApiError } from './api.js';
 import { createBoard } from './board.js';
 import { createKeyboard, KeyboardLayout } from './keyboard.js';
 import { renderHints } from './hints.js';
@@ -75,6 +75,18 @@ function keyboardCallbacks() {
     onEnter: handleEnter,
     onBackspace: () => !finished && board.backspace(),
   };
+}
+
+async function showInitialHints(myGeneration) {
+  try {
+    const response = await getInitialHints(session.session_uuid);
+    if (myGeneration !== gameGeneration) return; // stale by the time the request resolved
+    renderHints(el.hints, response.guess_stats);
+  } catch (err) {
+    if (myGeneration !== gameGeneration) return;
+    renderHints(el.hints, null);
+    if (!(err instanceof ApiError)) showToast(`Could not load hints (${err.message})`);
+  }
 }
 
 async function updateHintsPanel(word, pattern, myGeneration) {
@@ -229,6 +241,7 @@ export function mountGame({ onExit: exitCallback }) {
 
 export async function showGame(sessionInfo, stats) {
   gameGeneration += 1;
+  const myGeneration = gameGeneration;
   session = {
     session_uuid: sessionInfo.session_uuid,
     lang: stats.lang,
@@ -250,8 +263,18 @@ export async function showGame(sessionInfo, stats) {
   keyboard = createKeyboard(el.keyboard, keyboardCallbacks(), getKeyboardLayout());
   updateKeyboardToggleLabel();
 
+  // Always explicitly set the panel's content below, one way or another -
+  // never leave whatever a *previous* game (or a stale Reset) left in there.
+  // A fresh/just-reset game (no guesses yet) gets the precomputed best-opening
+  // hints immediately; a resumed mid-game session's hints stay cleared for
+  // now (game.best_guesses isn't persisted across sessions, so there's
+  // nothing correct to show until the next guess recomputes it).
   el.hints.hidden = session.game_mode !== GameMode.ASSISTED;
-  if (session.game_mode !== GameMode.ASSISTED) el.hints.innerHTML = '';
+  if (session.game_mode === GameMode.ASSISTED && stats.guesses.length === 0) {
+    await showInitialHints(myGeneration);
+  } else {
+    el.hints.innerHTML = '';
+  }
 
   board.rehydrate(stats.guesses, stats.patterns);
   applyKeyStatuses(stats.guesses, stats.patterns);

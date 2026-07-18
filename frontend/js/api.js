@@ -90,6 +90,9 @@ export const getWordToGuess = (sessionUuid) =>
 export const getGuessStats = (sessionUuid, word, pattern) =>
   post('/get_guess_stats', { session_uuid: sessionUuid, word, pattern });
 
+export const getInitialHints = (sessionUuid) =>
+  post('/get_initial_hints', { session_uuid: sessionUuid });
+
 export const submitGuess = (sessionUuid, word) =>
   post('/submit_guess', { session_uuid: sessionUuid, word });
 

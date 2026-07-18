@@ -121,6 +121,12 @@ class GuessStatsResponse(StatusResponse):
     guess_stats: GuessStats | None = None
 
 
+class InitialHintsRequest(BaseModel):
+    """Request body for `POST /get_initial_hints`."""
+
+    session_uuid: str
+
+
 class SubmitGuessRequest(BaseModel):
     """Request body for `POST /submit_guess`."""
 

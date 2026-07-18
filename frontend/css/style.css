@@ -277,7 +277,8 @@ main {
 
 /* ---------------------------------------------------------------- game header */
 
-#screen-game {
+#screen-game,
+#screen-solve {
   width: 100%;
   display: flex;
   flex-direction: column;
@@ -532,6 +533,7 @@ main {
 /* ---------------------------------------------------------------- hints panel */
 
 #hints-panel {
+  margin-top: 0.75rem;
   width: 100%;
   background: var(--surface);
   border: 1px solid var(--border);
@@ -580,6 +582,7 @@ main {
 /* ---------------------------------------------------------------- solve screen */
 
 .solve-input-row {
+  margin-top: 0.75rem;
   display: flex;
   gap: 5px;
 }
@@ -617,6 +620,7 @@ main {
 }
 
 #solve-history {
+  margin-top: 0.75rem;
   width: 100%;
   display: flex;
   flex-direction: column;
@@ -625,6 +629,7 @@ main {
 
 .solve-history-row {
   display: flex;
+  justify-content: center;
   gap: 5px;
 }
 

@@ -102,6 +102,47 @@ def test_get_guess_stats_solve_mode_reports_best_guess(client: TestClient) -> No
     assert all(best_entropy >= entropy for pool_word in guess_stats['pool_words'] for entropy in pool_word.values())
 
 
+def test_get_initial_hints_assisted_mode_reports_best_opening(client: TestClient) -> None:
+    trigger = client.post('/api/app/precompute', json={'lang': 'mini', 'word_length': 5})
+    assert trigger.json()['job_status'] in ('running', 'done')
+
+    create = client.post('/api/app/create_game_session',
+                         json={'lang': 'mini', 'word_length': 5, 'max_tries': 6, 'game_mode': 'GAME_MODE_ASSISTED'})
+    assert create.json()['status'] == 'SUCCESS'
+    session_uuid = create.json()['session_uuid']
+
+    response = client.post('/api/app/get_initial_hints', json={'session_uuid': session_uuid})
+    body = response.json()
+
+    assert response.status_code == 200
+    assert body['status'] == 'SUCCESS'
+    guess_stats = body['guess_stats']
+
+    assert guess_stats is not None
+    assert guess_stats['best_guess'] is not None
+    assert len(guess_stats['best_guess']) == 1  # a single {word: entropy} entry
+    best_word = next(iter(guess_stats['best_guess']))
+    assert len(best_word) == 5
+    assert guess_stats['information'] > 0
+    assert len(guess_stats['pool_words']) == 20  # the whole mini.txt list - nothing guessed yet
+
+
+def test_get_initial_hints_play_mode_reports_none(client: TestClient) -> None:
+    create = client.post('/api/app/create_game_session',
+                         json={'lang': 'mini', 'word_length': 5, 'max_tries': 6, 'game_mode': 'GAME_MODE_PLAY'})
+    session_uuid = create.json()['session_uuid']
+
+    response = client.post('/api/app/get_initial_hints', json={'session_uuid': session_uuid})
+
+    assert response.json()['status'] == 'SUCCESS'
+    assert response.json()['guess_stats'] is None
+
+
+def test_get_initial_hints_rejects_unknown_session(client: TestClient) -> None:
+    response = client.post('/api/app/get_initial_hints', json={'session_uuid': 'does-not-exist'})
+    assert response.json()['status'] == 'ERROR'
+
+
 def test_create_game_session_solve_mode_fails_without_exhaustive_data(client: TestClient) -> None:
     response = client.post('/api/app/create_game_session',
                            json={'lang': 'mini', 'word_length': 5, 'max_tries': 6, 'game_mode': 'GAME_MODE_SOLVE'})
