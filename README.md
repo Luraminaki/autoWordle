@@ -175,7 +175,7 @@ See [INSTALL.md](INSTALL.md) for Windows/Debian/Ubuntu/Arch setup instructions.
 ## PLAYING THE GAME
 
 Once the app is running (see [INSTALL.md](INSTALL.md#running-the-app)), open
-`http://127.0.0.1:8000/` (or wherever the server is bound) in a browser -
+`http://127.0.0.1:10000/` (or wherever the server is bound) in a browser -
 the backend serves the frontend directly, nothing else to start or build.
 
 **Setup screen**: pick a language, word length, game mode, and max tries,

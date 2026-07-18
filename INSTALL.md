@@ -18,6 +18,13 @@ Requires **Python 3.12+**.
 
 <!-- /TOC -->
 
+Two install options below, and every OS section shows both:
+- `pip install -e .` - just the app itself (FastAPI, numpy, etc.) - all you
+  need to **run** the game.
+- `pip install -e ".[dev]"` - adds `ruff`/`pytest`/`pytest-cov`/`httpx` on
+  top - only needed if you're going to **run the tests or lint** (see
+  [Running the tests](#running-the-tests)). Skip it if you just want to play.
+
 ## Windows
 
 1. Install Python 3.12+ from [python.org](https://www.python.org/downloads/windows/) (check "Add python.exe to PATH" in the installer).
@@ -26,7 +33,8 @@ Requires **Python 3.12+**.
    ```powershell
    py -3.12 -m venv .venv
    .venv\Scripts\activate
-   pip install -e ".[dev]"
+   pip install -e .
+   # Or, to also be able to run tests/lint: pip install -e ".[dev]"
    ```
 
 ## Linux (Debian / Ubuntu)
@@ -39,7 +47,8 @@ sudo apt install python3.12 python3.12-venv python3-pip
 
 python3.12 -m venv .venv
 source .venv/bin/activate
-pip install -e ".[dev]"
+pip install -e .
+# Or, to also be able to run tests/lint: pip install -e ".[dev]"
 ```
 
 ## Linux (Arch)
@@ -51,7 +60,8 @@ sudo pacman -S python python-pip
 
 python -m venv .venv
 source .venv/bin/activate
-pip install -e ".[dev]"
+pip install -e .
+# Or, to also be able to run tests/lint: pip install -e ".[dev]"
 ```
 
 ## Running the app
@@ -59,13 +69,23 @@ pip install -e ".[dev]"
 From the repository root, with the virtual environment activated:
 
 ```bash
-uvicorn autoWordle.main:app --reload
+uvicorn autoWordle.main:app --reload --port 10000
 ```
 
-Then open **http://127.0.0.1:8000/** in a browser to play - the same
+Then open **http://127.0.0.1:10000/** in a browser to play - the same
 `uvicorn` process serves the frontend directly, nothing else to start or
 build. See [PLAYING THE GAME](README.md#playing-the-game) in the README for
 how the web UI itself works.
+
+**`--reload` is for development only** - it watches source files and
+restarts the process on every change, which forces a single worker process
+and adds file-watching overhead you don't want under real traffic. For
+production, drop it and add `--workers` instead (sized to available CPU
+cores):
+
+```bash
+uvicorn autoWordle.main:app --port 10000 --workers 4
+```
 
 The app reads `config.json` and the `data/` folder relative to the current
 working directory by default - run it from the repository root. To run it
@@ -73,13 +93,16 @@ from elsewhere (or point it at a different config/data location entirely),
 set `AUTOWORDLE_APP_ROOT`:
 
 ```bash
-AUTOWORDLE_APP_ROOT=/path/to/autoWordle uvicorn autoWordle.main:app
+AUTOWORDLE_APP_ROOT=/path/to/autoWordle uvicorn autoWordle.main:app --port 10000
 ```
 
 The API is served under `/api/app/...` (see `autoWordle/webapp/api_views.py`); interactive
 docs are available at `/docs` once the app is running.
 
 ## Running the tests
+
+Requires the `[dev]` extras (`pip install -e ".[dev]"` - see above) if you
+only installed the base package so far.
 
 ```bash
 pytest
