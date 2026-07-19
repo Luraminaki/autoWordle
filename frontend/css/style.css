@@ -323,6 +323,7 @@ main {
 
 .session-id-row {
   width: 100%;
+  margin-top: 0.75rem;
   display: flex;
   align-items: center;
   justify-content: center;
