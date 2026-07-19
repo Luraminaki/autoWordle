@@ -8,6 +8,7 @@ import { GameMode } from './statics.js';
 import { loadSession, clearSession, getThemePreference } from './storage.js';
 import { showToast } from './toast.js';
 import { applyTheme, themeLabel, cycleTheme } from './theme.js';
+import { initHelp } from './help.js';
 
 const screens = {
   setup: document.getElementById('screen-setup'),
@@ -76,6 +77,7 @@ async function enterGame() {
 }
 
 initTheme();
+initHelp();
 
 mountSetup(enterGame);
 mountGame({ onExit: goToSetup });

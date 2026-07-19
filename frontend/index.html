@@ -44,6 +44,7 @@
     <div class="meta">
       <span class="badge" id="meta-version"></span>
       <span class="badge" id="meta-active-games"></span>
+      <button id="help-toggle" type="button" title="How to play">?</button>
       <button id="theme-toggle" type="button" title="Cycle the color theme (auto/light/dark)"></button>
     </div>
   </header>
@@ -153,6 +154,54 @@
       <div id="solve-hints-panel" hidden></div>
     </section>
   </main>
+
+  <div id="help-modal-overlay" class="modal-overlay" hidden>
+    <div id="help-modal" class="modal" role="dialog" aria-modal="true" aria-labelledby="help-modal-title">
+      <button id="help-modal-close" class="modal-close" type="button" aria-label="Close">×</button>
+      <h2 id="help-modal-title">How to play</h2>
+
+      <h3>Game modes</h3>
+      <ul>
+        <li><strong>Play</strong> - the classic game: guess the hidden word within the allotted tries. Type
+          letters (or click the on-screen keyboard) and press Enter to submit a guess.</li>
+        <li><strong>Assisted</strong> - same as Play, plus a live solver-hints panel next to the board that
+          updates after every guess. See "Reading the hints panel" below.</li>
+        <li><strong>Solve</strong> - for solving a puzzle from somewhere else (paper, another site, a friend),
+          not one this app generated. Enter a guess, then manually set the color pattern it actually
+          produced by clicking each tile to cycle miss/misplaced/exact - the solver narrows the candidate
+          pool down from there.</li>
+      </ul>
+
+      <h3>Reading the hints panel (Assisted mode)</h3>
+      <ul>
+        <li><strong>Candidates remaining</strong> - how many words still match everything known so far.</li>
+        <li><strong>Information gained so far</strong> - a running total, in bits, of how much your guesses
+          have narrowed the candidate pool. Higher means more narrowed down.</li>
+        <li><strong>Best next guess</strong> - the single word expected to eliminate the most candidates on
+          average, picked from the whole dictionary rather than just the remaining candidates - it's
+          sometimes a word that can't itself be the answer, chosen purely to test letters efficiently.</li>
+        <li><strong>Letters still possible</strong> - every letter that could still appear in the answer,
+          based on guesses so far. A "×N" mark means the word contains at least N copies of that letter.</li>
+        <li><strong>Candidate words</strong> - actual words still consistent with every guess made so far -
+          this is the real remaining answer pool.</li>
+        <li><strong>Elimination suggestions</strong> - extra candidate words grouped by how many
+          still-unknown letters they contain, listed from most to least covered. These aren't necessarily
+          good guesses to win with - they're aimed at testing unknown letters efficiently, which is a
+          different goal from "Best next guess".</li>
+      </ul>
+
+      <h3>Other things worth knowing</h3>
+      <ul>
+        <li>Sessions persist across page reloads and resume automatically. If your browser doesn't keep
+          that, copy the Session ID shown on the game/solve screen and paste it into "Resume a session" on
+          the setup screen later.</li>
+        <li>The on-screen keyboard (Play/Assisted) can switch between QWERTY/AZERTY layouts - this only
+          rearranges the clickable buttons; physical typing isn't affected.</li>
+        <li>The <code>Theme</code> button cycles a manual color override (Auto/Light/Dark) on top of your
+          OS/browser's automatic setting.</li>
+      </ul>
+    </div>
+  </div>
 
   <div id="toast" role="status" aria-live="polite" hidden></div>
 
