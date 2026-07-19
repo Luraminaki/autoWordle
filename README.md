@@ -9,6 +9,8 @@ I had a couple of goals this time around:
 
 It's still a "work in progress" as of now... And there is a lot of room for improvement.
 
+![Play mode, mid-game](screenshots/play-mode.png)
+
 ## VERSION
 
 The current version lives in [pyproject.toml](pyproject.toml) and is read from package
@@ -185,11 +187,17 @@ the backend serves the frontend directly, nothing else to start or build.
 
 **Setup screen**: pick a language, word length, game mode, and max tries,
 then Start.
+
+![Setup screen](screenshots/setup.png)
+
 - `GAME_MODE_PLAY`: the classic game - guess the hidden word within the
   allotted tries.
 - `GAME_MODE_ASSISTED`: same as Play, plus a live solver-hints panel
   (candidates remaining, best next guess, elimination suggestions) after
   every guess.
+
+  ![Assisted mode's solver-hints panel](screenshots/assisted-mode.png)
+
 - `GAME_MODE_SOLVE`: for solving an *external* puzzle (paper, another site,
   a friend) rather than one this app generated - enter a guess and manually
   set the pattern it produced, and the solver narrows the candidate pool
